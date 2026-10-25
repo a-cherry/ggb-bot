@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsx watch src/server.ts",
     "register": "tsx scripts/register-commands.ts",
-    "sheets-smoke": "tsx scripts/sheets-smoke.ts"
+    "sheets-smoke": "tsx scripts/sheets-smoke.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
   },
   "keywords": [],
   "author": "",
@@ -24,5 +26,8 @@
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
