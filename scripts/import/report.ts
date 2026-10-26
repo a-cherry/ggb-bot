@@ -6,6 +6,8 @@ import type { Classification, ImportedTrainer } from './classify.js';
 const TRAINERS_MIN = 8;
 const TRAINERS_MAX = 15;
 const LEADERS_REQUIRED = 1;
+const MANAGERS_MAX = 1;
+const NON_PLAYING_MAX = 3;
 
 export interface ReportOptions {
   title: string;
@@ -37,15 +39,17 @@ export function buildReport(c: Classification, opts: ReportOptions): string[] {
       const leaders = ts.filter((t) => t.leadership === 'leader').length;
       const managers = ts.filter((t) => t.leadership === 'manager').length;
       const leaderError = leaders !== LEADERS_REQUIRED ? ` [Needs ${LEADERS_REQUIRED}]` : '';
+      const managerError = managers > MANAGERS_MAX ? ` [Max ${MANAGERS_MAX}]` : '';
       const trainerError =
         trainers < TRAINERS_MIN || trainers > TRAINERS_MAX ? ` [Needs ${TRAINERS_MIN}-${TRAINERS_MAX}]` : '';
+      const nonPlayingError = nonPlaying > NON_PLAYING_MAX ? ` [Max ${NON_PLAYING_MAX}]` : '';
       return (
         `**${gym}**: ` +
         [
           `${count(leaders, 'Leader')}${leaderError}`,
-          count(managers, 'Manager'),
+          `${count(managers, 'Manager')}${managerError}`,
           `${count(trainers, 'Participating trainer')}${trainerError}`,
-          count(nonPlaying, 'Non-Player'),
+          `${count(nonPlaying, 'Non-Player')}${nonPlayingError}`,
         ].join(', ')
       );
     }),
