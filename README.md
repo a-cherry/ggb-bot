@@ -17,6 +17,10 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 | `src/server.ts` | Express server: `POST /interactions` (signature-verified), `GET /health` |
 | `src/google.ts` | Sheets and Drive clients for the service account |
 | `src/schema.ts` | Every League DB tab and its columns, from the Spec |
+| `src/league-db.ts` | Checks the League DB tabs against the schema |
+| `src/discord.ts` | Discord REST calls the bot makes on its own: roles, members, messages |
+| `src/config.ts` | Loads `config/league.json`: import role names, S4 relegated gyms |
+| `scripts/import.ts`, `scripts/import/` | The one-shot import of gyms and trainers |
 | `scripts/register-commands.ts` | Registers slash commands to the dev guild (the single source of command definitions) |
 | `scripts/db-setup.ts` | Builds all League DB tabs in an empty workbook |
 | `scripts/sheets-smoke.ts` | Writes and reads the `Bot state` tab to check Sheets access |
@@ -62,6 +66,7 @@ The tunnel URL changes every time cloudflared restarts, so step 3 repeats each s
 | `npm run register` | Overwrites the dev guild's slash commands with the ones in `scripts/register-commands.ts` |
 | `npm run db:setup` | Builds every League DB tab in the workbook at `GOOGLE_LEAGUE_DB_ID` |
 | `npm run sheets-smoke` | Checks the service account can read and write the workbook |
+| `npm run import -- --season N --dry-run` / `--commit [--force]` | Imports gyms and trainers from Discord (see Testing the import) |
 
 ## Setting up a League DB workbook
 
@@ -74,8 +79,6 @@ The script adds any missing tabs with the Spec's headers, freezes and bolds each
 ## Testing the import
 
 The import reads the Discord member list once and writes the Gyms and Trainers tabs (Spec: "Initial population"). Test it against the dev test server and dev workbook, never the real ones.
-
-> The import script is the next piece being built. The commands below are what it will take.
 
 ### 1. Test server
 
@@ -123,7 +126,10 @@ Run the dry run again. Phoenix should show 1 Leader and 1 Participating trainer,
 
 ### 4. Commit
 
-1. Run `npm run db:setup` if the dev workbook is new.
+1. Run `npm run db:setup` if the dev workbook is new. Both import modes refuse to run until every tab is set up.
 2. `npm run import -- --season 5 --commit`
-3. In the dev workbook, check the Gyms tab (three `active` gyms plus the four S4 gyms as `relegated`), the Trainers tab (one row per imported trainer) and Roster history (one `import` row per trainer).
-4. Run the commit again: it should refuse because Trainers already has rows. `--force` resets and re-imports.
+3. In the dev workbook, check:
+    - Gyms: one `active` row per gym role, plus the four S4 gyms as `relegated`, with IDs `G001`, `G002`, ... in name order.
+    - Trainers: one row per imported trainer. Discord IDs must show every digit (they're stored as text).
+    - Roster history: one `import` row per trainer, before columns blank.
+4. Run the commit again: it should refuse because Gyms, Trainers and Roster history have rows. `--force` clears those three tabs and imports again. `--force` still refuses if Divisions, Matches, Match rosters or Roster requests have rows: they store gym IDs, and a reset assigns new ones.

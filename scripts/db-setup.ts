@@ -5,70 +5,29 @@ import dotenv from 'dotenv';
 dotenv.config();
 import type { sheets_v4 } from 'googleapis';
 import { getSheets } from '../src/google.js';
+import { checkTabs, getLeagueDbId, getTabIds, isTabEmpty } from '../src/league-db.js';
 import { TABS, tabRange } from '../src/schema.js';
-
-const spreadsheetId = process.env.GOOGLE_LEAGUE_DB_ID;
-if (!spreadsheetId) throw new Error('GOOGLE_LEAGUE_DB_ID is not set');
 
 // The tab a new Google Sheets workbook starts with. Removed when empty.
 const DEFAULT_TAB = 'Sheet1';
 
+const spreadsheetId = getLeagueDbId();
 const sheets = getSheets();
 const schema = Object.values(TABS);
 
-async function getTabIds() {
-  const res = await sheets.spreadsheets.get({
-    spreadsheetId,
-    fields: 'sheets.properties(sheetId,title)',
-  });
-  return new Map(res.data.sheets!.map((s) => [s.properties!.title!, s.properties!.sheetId!]));
-}
-
-async function isEmpty(name: string) {
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range: tabRange(name) });
-  return !res.data.values?.length;
-}
-
-const existing = await getTabIds();
-
 // Plan: check every existing schema tab's header before writing anything.
-const toAdd: string[] = [];
-const needHeader: string[] = [];
-const problems: string[] = [];
-
-const present = schema.filter((t) => existing.has(t.name));
-const headerRes = present.length
-  ? await sheets.spreadsheets.values.batchGet({
-      spreadsheetId,
-      ranges: present.map((t) => `${tabRange(t.name)}!1:1`),
-    })
-  : undefined;
-
-for (const tab of schema) {
-  if (!existing.has(tab.name)) {
-    toAdd.push(tab.name);
-    needHeader.push(tab.name);
-    continue;
-  }
-  const i = present.indexOf(tab);
-  const header = (headerRes!.data.valueRanges![i].values?.[0] ?? []).map((v) => String(v).trim());
-  if (header.length === 0) {
-    if (await isEmpty(tab.name)) needHeader.push(tab.name);
-    else problems.push(`${tab.name}: row 1 is blank but the tab has data`);
-  } else if (header.join('\t') !== tab.columns.join('\t')) {
-    problems.push(
-      `${tab.name}: header does not match\n    expected: ${tab.columns.join(', ')}\n    found:    ${header.join(', ')}`,
-    );
-  }
-}
-
+const status = await checkTabs(spreadsheetId);
+const problems = [...status].flatMap(([name, s]) => (s.kind === 'problem' ? [`${name}: ${s.message}`] : []));
 if (problems.length) {
   console.error('Nothing was written. Fix these tabs and re-run:');
   for (const p of problems) console.error(`  ${p}`);
   process.exit(1);
 }
 
-const removeDefault = existing.has(DEFAULT_TAB) && (await isEmpty(DEFAULT_TAB));
+const toAdd = schema.filter((t) => status.get(t.name)!.kind === 'missing').map((t) => t.name);
+const needHeader = schema.filter((t) => status.get(t.name)!.kind !== 'ok').map((t) => t.name);
+const existing = await getTabIds(spreadsheetId);
+const removeDefault = existing.has(DEFAULT_TAB) && (await isTabEmpty(spreadsheetId, DEFAULT_TAB));
 
 // Add missing tabs (and drop the empty default tab, now that others exist).
 const structural: sheets_v4.Schema$Request[] = toAdd.map((title) => ({ addSheet: { properties: { title } } }));
@@ -91,7 +50,7 @@ if (needHeader.length) {
 }
 
 // Every schema tab: schema order, frozen bold header row.
-const ids = await getTabIds();
+const ids = await getTabIds(spreadsheetId);
 await sheets.spreadsheets.batchUpdate({
   spreadsheetId,
   requestBody: {

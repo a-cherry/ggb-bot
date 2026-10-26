@@ -12,6 +12,7 @@ const NON_PLAYING_MAX = 3;
 export interface ReportOptions {
   title: string;
   memberCount: number;
+  committed: boolean;
   // How a member is shown: a mention in Discord, a name in the terminal.
   mention: (m: { discordId: string; name: string }) => string;
 }
@@ -24,7 +25,9 @@ export function buildReport(c: Classification, opts: ReportOptions): string[] {
 
   lines.push(
     `**${opts.title}**`,
-    `Read ${opts.memberCount} members. ${c.trainers.length} trainers will be imported into ${c.activeGyms.length} active gyms.`,
+    opts.committed
+      ? `Read ${opts.memberCount} members. Wrote ${c.activeGyms.length} active and ${c.relegatedGyms.length} relegated gyms, ${c.trainers.length} trainers and ${c.trainers.length} roster history rows.`
+      : `Read ${opts.memberCount} members. ${c.trainers.length} trainers will be imported into ${c.activeGyms.length} active gyms.`,
   );
 
   const byGym = new Map<string, ImportedTrainer[]>(c.activeGyms.map((g) => [g, []]));
@@ -59,7 +62,12 @@ export function buildReport(c: Classification, opts: ReportOptions): string[] {
   lines.push('Added with status `relegated` so their names stay reserved.');
   list(c.relegatedGyms);
 
-  lines.push('', 'Abbreviations are blank for every gym. Staff fill them in the Gyms tab after the commit.');
+  lines.push(
+    '',
+    opts.committed
+      ? 'Abbreviations are blank for every gym. Staff fill them in the Gyms tab.'
+      : 'Abbreviations are blank for every gym. Staff fill them in the Gyms tab after the commit.',
+  );
 
   section('Not imported');
   lines.push(`More than one gym role (${c.multipleGymRoles.length}):`);
