@@ -10,7 +10,8 @@
     "sheets-smoke": "tsx scripts/sheets-smoke.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "db:setup": "tsx scripts/db-setup.ts"
+    "db:setup": "tsx scripts/db-setup.ts",
+    "import": "tsx scripts/import.ts"
   },
   "keywords": [],
   "author": "",

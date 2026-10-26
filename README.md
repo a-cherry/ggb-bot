@@ -107,7 +107,7 @@ Assign roles (right-click a member > Roles):
 npm run import -- --season 5 --dry-run
 ```
 
-Check the report printed to the terminal and posted to `#bot-staff`. Daybreak should be flagged with no leader, and every gym flagged under 8 trainers.
+Check the report printed to the terminal and posted to `#bot-staff`. Daybreak and Frog EX should show `[Needs 1]` on Leaders, and every gym `[Needs 8-15]` on Participating trainers.
 
 ### 3. Run B
 
@@ -115,11 +115,11 @@ Keep your roles; change the alts:
 
 | Member | Roles | Expected |
 |---|---|---|
-| Alt1 | Participating Trainer, Daybreak, Gym Manager | Imported, `manager` |
-| Alt2 | Participating Trainer, Gym Leader, Team Skull | Not imported: no gym role, and Gym Leader with no gym role |
+| Alt1 | Participating Trainer, Daybreak, Gym Manager | Imported to Daybreak, `manager` |
+| Alt2 | Participating Trainer, Phoenix, Team Skull | Not imported: more than one gym role (relegated gym roles count) |
 | Alt3 | Frog EX only | Not imported: gym role without Participating Trainer |
 
-Run the dry run again. Frog EX should now be flagged with no leader.
+Run the dry run again. Phoenix should show 1 Leader and 1 Participating trainer, Daybreak 1 Manager and 1 Participating trainer, Frog EX nobody, and "Both Gym Leader and Gym Manager" none.
 
 ### 4. Commit
 

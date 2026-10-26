@@ -1,0 +1,9 @@
+{
+  "roles": {
+    "participatingTrainer": "Participating Trainer",
+    "gymLeader": "Gym Leader",
+    "gymManager": "Gym Manager",
+    "nonPlayer": "Non-Player"
+  },
+  "relegatedGyms": ["Dragonite's Requiem", "Team Skull", "Hall of Fame", "Phantom Force"]
+}
