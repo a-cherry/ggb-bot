@@ -32,7 +32,7 @@ export async function writeImport(
   ].sort((a, b) => a[0].localeCompare(b[0]));
 
   const trainers = c.trainers.map((t) => [
-    t.discordId, t.name, '', ids.get(t.gym)!, t.role, t.leadership, 'active',
+    t.discordId, t.name, t.username, '', ids.get(t.gym)!, t.role, t.leadership, 'active',
   ]);
 
   // Before: no gym. After: their gym, role and leadership (Spec: "Initial population").

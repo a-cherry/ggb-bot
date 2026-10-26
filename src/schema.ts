@@ -7,7 +7,7 @@ export const TABS = {
   },
   trainers: {
     name: 'Trainers',
-    columns: ['discord_id', 'server_nickname', 'country', 'gym_id', 'role', 'leadership', 'status'],
+    columns: ['discord_id', 'server_nickname', 'username', 'country', 'gym_id', 'role', 'leadership', 'status'],
   },
   decks: {
     name: 'Decks',

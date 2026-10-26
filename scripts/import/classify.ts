@@ -9,6 +9,7 @@ export type TrainerRole = 'trainer' | 'non-playing';
 export interface ImportedTrainer {
   discordId: string;
   name: string;
+  username: string;
   gym: string; // gym name; mapped to a gym_id on commit
   role: TrainerRole;
   leadership: Leadership;
@@ -82,6 +83,7 @@ export function classify(roles: Role[], members: Member[], config: LeagueConfig)
     const both = isLeader && isManager;
     result.trainers.push({
       ...who,
+      username: m.user.username,
       gym: gyms[0],
       role: has(ids.nonPlayer) ? 'non-playing' : 'trainer',
       leadership: both ? 'none' : isLeader ? 'leader' : isManager ? 'manager' : 'none',
