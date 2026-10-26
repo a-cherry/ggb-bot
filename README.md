@@ -70,11 +70,37 @@ The tunnel URL changes every time cloudflared restarts, so step 3 repeats each s
 
 ## Setting up a League DB workbook
 
-1. Create an empty Google Sheets workbook.
-2. Share it with the service account's email (the `client_email` in its JSON key) as Editor.
-3. Put its ID in `GOOGLE_LEAGUE_DB_ID` and run `npm run db:setup`.
+### Build a new workbook
 
-The script adds any missing tabs with the Spec's headers, freezes and bolds each header row, puts tabs in Spec order, and removes the empty default `Sheet1`. It's safe to re-run. If an existing tab's header doesn't match the schema, it lists the problem and writes nothing.
+1. Create an empty Google Sheets workbook.
+2. Share it with the service account as Editor. The email is the `client_email` in the key; to print it:
+
+    ```sh
+    K="$(grep GOOGLE_SERVICE_ACCOUNT_KEY_B64 .env | cut -d= -f2-)" node -e "console.log(JSON.parse(Buffer.from(process.env.K,'base64')).client_email)"
+    ```
+
+3. Put the workbook ID in `.env` as `GOOGLE_LEAGUE_DB_ID`. It's the part of the URL between `/d/` and `/edit`.
+4. Build the tabs and check access:
+
+    ```sh
+    npm run db:setup
+    npm run sheets-smoke
+    ```
+
+`db:setup` adds any missing tabs with the Spec's headers, freezes and bolds each header row, puts tabs in Spec order, and removes the empty default `Sheet1`. It's safe to re-run: tabs that already match print `ok`. If an existing tab's header doesn't match the schema, it lists expected vs found and writes nothing.
+
+### After a schema change
+
+When a column is added to or changed in `src/schema.ts`, `db:setup` refuses on that tab. `db:setup` never rewrites a header over existing data, so the fix depends on the workbook:
+
+- **Dev workbook (test data only):** delete the tab in Google Sheets, then rebuild it and re-import:
+
+    ```sh
+    npm run db:setup
+    npm run import -- --season 5 --commit --force
+    ```
+
+- **Real League DB:** don't delete anything. Insert the new column in the tab by hand at the position the schema expects, type its header, then run `npm run db:setup` to confirm every tab prints `ok`.
 
 ## Testing the import
 
