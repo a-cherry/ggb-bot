@@ -9,7 +9,8 @@
     "register": "tsx scripts/register-commands.ts",
     "sheets-smoke": "tsx scripts/sheets-smoke.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "db:setup": "tsx scripts/db-setup.ts"
   },
   "keywords": [],
   "author": "",
