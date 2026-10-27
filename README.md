@@ -43,7 +43,9 @@ Fill in `.env`:
 | `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY` | Discord Developer Portal > your app > General Information |
 | `DISCORD_BOT_TOKEN` | Developer Portal > Bot > Reset Token |
 | `DISCORD_DEV_GUILD_ID` | Right-click the test server > Copy Server ID (needs Developer Mode, below) |
-| `DISCORD_STAFF_CHANNEL_ID` | Right-click the staff channel > Copy Channel ID |
+| `DISCORD_STAFF_CHANNEL_ID` | Right-click the staff channel > Copy Channel ID. Gets the import report and roster request approval cards |
+| `DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID` | Same, for the channel where approved roster changes are announced |
+| `DISCORD_MATCH_RESULTS_ANNOUNCEMENTS_CHANNEL_ID` | Same, for the channel where match results are announced (not used yet) |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | `base64 -i key.json` of the service account's JSON key |
 | `GOOGLE_LEAGUE_DB_ID` | The League DB workbook URL: `docs.google.com/spreadsheets/d/<this part>/edit` |
 
