@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
+import { commandDefinitions } from '../src/commands/index.js';
 
 const appId = process.env.DISCORD_APPLICATION_ID;
 const guildId = process.env.DISCORD_DEV_GUILD_ID;
@@ -7,10 +8,6 @@ const token = process.env.DISCORD_BOT_TOKEN;
 if (!appId || !guildId || !token) {
   throw new Error('DISCORD_APPLICATION_ID, DISCORD_DEV_GUILD_ID and DISCORD_BOT_TOKEN must be set');
 }
-
-const commands = [
-  { name: 'ping', description: 'Check that the bot is responding', type: 1 },
-];
 
 const res = await fetch(
   `https://discord.com/api/v10/applications/${appId}/guilds/${guildId}/commands`,
@@ -20,7 +17,7 @@ const res = await fetch(
       Authorization: `Bot ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(commands),
+    body: JSON.stringify(commandDefinitions),
   },
 );
 

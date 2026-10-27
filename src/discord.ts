@@ -67,5 +67,12 @@ export async function listMembers(guildId: string): Promise<Member[]> {
 export const postMessage = (channelId: string, content: string) =>
   call('POST', `/channels/${channelId}/messages`, { content, allowed_mentions: { parse: [] } });
 
+// Fills in a deferred interaction reply. The interaction token is valid for 15 minutes.
+export const editOriginalResponse = (applicationId: string, token: string, content: string) =>
+  call('PATCH', `/webhooks/${applicationId}/${token}/messages/@original`, {
+    content,
+    allowed_mentions: { parse: [] },
+  });
+
 // The name a member shows in the server: nickname, else global display name, else username.
 export const displayName = (m: Member) => m.nick ?? m.user.global_name ?? m.user.username;

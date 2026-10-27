@@ -15,13 +15,17 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 | Path | Purpose |
 |---|---|
 | `src/server.ts` | Express server: `POST /interactions` (signature-verified), `GET /health` |
+| `src/interactions.ts` | Deferred slash command replies: answer "thinking" at once, fill in the reply later |
+| `src/commands/` | Slash command definitions and handlers (`index.ts` lists them all) |
+| `src/sheet-rows.ts` | Typed read, append and update of League DB rows |
+| `src/seasons.ts` | Active season and in season vs off-season |
 | `src/google.ts` | Sheets and Drive clients for the service account |
 | `src/schema.ts` | Every League DB tab and its columns, from the Spec |
 | `src/league-db.ts` | Checks the League DB tabs against the schema |
-| `src/discord.ts` | Discord REST calls the bot makes on its own: roles, members, messages |
+| `src/discord.ts` | Discord REST calls: roles, members, messages, deferred replies |
 | `src/config.ts` | Loads `config/league.json`: import role names, S4 relegated gyms |
 | `scripts/import.ts`, `scripts/import/` | The one-shot import of gyms and trainers |
-| `scripts/register-commands.ts` | Registers slash commands to the dev guild (the single source of command definitions) |
+| `scripts/register-commands.ts` | Registers the slash commands in `src/commands/` to the dev guild |
 | `scripts/db-setup.ts` | Builds all League DB tabs in an empty workbook |
 | `scripts/sheets-smoke.ts` | Writes and reads the `Bot state` tab to check Sheets access |
 
@@ -161,3 +165,13 @@ Run the dry run again. Phoenix should show 1 Leader and 1 Participating trainer,
     - Trainers: one row per imported trainer. Discord IDs must show every digit (they're stored as text).
     - Roster history: one `import` row per trainer, before columns blank.
 4. Run the commit again: it should refuse because Gyms, Trainers and Roster history have rows. `--force` clears those three tabs and imports again. `--force` still refuses if Divisions, Matches, Match rosters or Roster requests have rows: they store gym IDs, and a reset assigns new ones.
+
+## Roster requests setup
+
+Roster and gym commands work only in `#transfer-request` and `#bot-staff`. Discord enforces this, not the bot, so it's set by hand in each server (dev and production) after `npm run register`:
+
+1. Server Settings > Integrations > the bot.
+2. Open `/roster` > Add Channels, add "All Channels", `#transfer-request` and `#bot-staff`, set All Channels to ✗ and the other two to ✓, and save. Leave Role & Member Overrides empty. Do the same for `/gym` once it exists.
+3. Check from an account without Administrator. The server owner (and likely anyone with Administrator) still sees the command in every channel; that's expected.
+
+`/roster whoami` (temporary) shows what the bot reads about you: your Trainers row, your gym and whether today is in season.

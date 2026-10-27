@@ -5,6 +5,8 @@ import {
   InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
+import { deferredCommands } from './commands/index.js';
+import { runDeferred } from './interactions.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const publicKey = process.env.DISCORD_PUBLIC_KEY;
@@ -33,6 +35,14 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
       data: { content: 'pong' },
     });
     return;
+  }
+
+  if (interaction.type === InteractionType.APPLICATION_COMMAND) {
+    const handler = deferredCommands[interaction.data.name];
+    if (handler) {
+      runDeferred(res, interaction, handler);
+      return;
+    }
   }
 
   res.status(400).send({ error: 'unknown interaction' });
