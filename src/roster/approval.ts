@@ -1,14 +1,18 @@
 // Approve and Reject on a staff approval card (Spec: "Approval").
 import { getLeagueConfig } from '../config.js';
-import { cachedRoles, displayName, getMember, postMessage, renderEmote, type Member } from '../discord.js';
+import { cachedRoles, displayName, getMember, postMessage, renderEmote, sheetEmote, type Member } from '../discord.js';
 import type { ComponentHandler, ComponentInteraction, ComponentResult } from '../interactions.js';
 import { withLock } from '../locks.js';
 import { appendRows, readTabs, updateRows, type Row, type SheetRow } from '../sheet-rows.js';
 import { rebuildViews } from '../views.js';
-import { checkAdd, checkRemove, checkRequester, checkUpdate, leadershipFor } from './checks.js';
-import { applyRoleChanges, type RoleChange } from './discord-roles.js';
+import {
+  checkAdd, checkDisband, checkRebrand, checkRemove, checkRequester, checkUpdate, FAN_SUFFIX, leadershipFor,
+} from './checks.js';
+import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
 import { findGym, gymName, loadLeague, mention, type Gym, type League, type Trainer } from './league.js';
-import { parseChange, promotionLabel, type RequestType, type RosterRequest } from './requests.js';
+import {
+  closeApprovalCard, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
+} from './requests.js';
 
 async function isStaff(guildId: string, member: Member): Promise<boolean> {
   const staff = new Set(getLeagueConfig().staffRoles);
@@ -30,7 +34,9 @@ export const handleDecision: ComponentHandler = async (interaction) => {
   // Approvals for one gym run one at a time, so two can't both pass the
   // non-playing limit or both change leadership. Rejects take it too, so a
   // reject can't land in the middle of an approval of the same request.
-  return withLock(`gym:${found.values.gym_id}`, () => decide(interaction, requestId, action === 'approve'));
+  const run = () => decide(interaction, requestId, action === 'approve');
+  // Rebrands of different gyms also run one at a time, so two can't take the same name.
+  return withLock(`gym:${found.values.gym_id}`, () => (found.values.type === 'rebrand' ? withLock('rebrand', run) : run()));
 };
 
 // The card's text plus its outcome line; the runner removes the buttons.
@@ -72,17 +78,34 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   if (outdated) return finish({ ...decided, status: 'outdated', refusal_message: outdated });
 
   const gym = findGym(league, row.values.gym_id)!; // the requester check above guarantees an active gym
-  const refusal = recheck(league, row.values, gym);
+  const roleNames = (await cachedRoles(interaction.guild_id, true)).map((r) => r.name);
+  const refusal = recheck(league, row.values, gym, roleNames);
   if (refusal) return finish({ ...decided, status: 'refused', refusal_message: refusal });
 
-  const { announcement, roles } = await apply(interaction.guild_id, league, row.values, gym);
+  const applied = await apply(interaction.guild_id, league, decided, gym);
   // Last write: if the bot dies before this, crash recovery finishes the request.
   const result = await finish({ ...decided, status: 'approved' });
 
   await rebuildViews();
-  const roleFailure = await applyRoleChanges(interaction.guild_id, roles);
-  await announce(announcement);
+  const roleFailure =
+    (await renameRoles(interaction.guild_id, applied.renames ?? [])) ??
+    (await applyRoleChanges(interaction.guild_id, applied.roles));
+  await announce(applied.announcement);
+  await closeCards(applied.outdated ?? []);
   return roleFailure ? { message: `${result.message}\nDiscord roles not updated: ${roleFailure}` } : result;
+}
+
+// The cards of requests a disband made outdated.
+async function closeCards(requests: RosterRequest[]): Promise<void> {
+  for (const req of requests) {
+    try {
+      if (!(await closeApprovalCard(req.request_id, outcomeLine(req)))) {
+        console.error(`${req.request_id}: staff card not found to mark outdated`);
+      }
+    } catch (err) {
+      console.error(`${req.request_id}: staff card could not be marked outdated:`, err);
+    }
+  }
 }
 
 // A member with no Trainers row compares as the row an add would create for them.
@@ -91,7 +114,8 @@ const NO_ROW = { gym_id: '', role: 'trainer', leadership: 'none', status: 'activ
 // The target changed since the request was made, or the requester can no
 // longer make it: the request is outdated rather than re-checked.
 function outdatedReason(league: League, req: RosterRequest): string | undefined {
-  const row = league.trainers.find((t) => t.values.discord_id === req.target)?.values;
+  // A rebrand or disband has no target; only the requester is re-checked.
+  const row = isGymRequest(req.type) ? undefined : league.trainers.find((t) => t.values.discord_id === req.target)?.values;
   const now = row ?? NO_ROW;
   const then = req.snapshot_status
     ? { gym_id: req.snapshot_gym_id, role: req.snapshot_role, leadership: req.snapshot_leadership, status: req.snapshot_status }
@@ -103,7 +127,7 @@ function outdatedReason(league: League, req: RosterRequest): string | undefined 
     ['leadership', then.leadership, now.leadership, plain],
     ['status', then.status, now.status, plain],
   ];
-  const changed = fields
+  const changed = (isGymRequest(req.type) ? [] : fields)
     .filter(([, before, after]) => before !== after)
     .map(([name, before, after, fmt]) => `${name} changed from ${fmt(before)} to ${fmt(after)}`);
   if (changed.length) return `${mention(req.target)}'s ${changed.join(', ')} since the request was made.`;
@@ -116,7 +140,7 @@ function outdatedReason(league: League, req: RosterRequest): string | undefined 
   return undefined;
 }
 
-function recheck(league: League, req: RosterRequest, gym: Gym): string | undefined {
+function recheck(league: League, req: RosterRequest, gym: Gym, roleNames: string[]): string | undefined {
   const change = parseChange(req.change);
   switch (req.type as RequestType) {
     case 'add':
@@ -125,18 +149,23 @@ function recheck(league: League, req: RosterRequest, gym: Gym): string | undefin
       return checkRemove(league, req.target, gym, req.request_id);
     case 'update-trainer':
       return checkUpdate(league, req.target, gym, change, req.request_id);
-    default:
-      throw new Error(`approving ${req.type} requests isn't built yet`);
+    case 'rebrand':
+      return checkRebrand(league, gym, change, roleNames, req.request_id);
+    case 'disband':
+      return checkDisband(league, gym, req.request_id);
   }
 }
 
 interface Applied {
   announcement: string;
   roles: RoleChange[]; // Discord roles to change once the request is approved
+  renames?: RoleRename[];
+  outdated?: RosterRequest[]; // other requests the approval made outdated, whose cards need closing
 }
 
 // Writes Roster history and Trainers (Spec: "What each change writes") and
-// returns the announcement and role changes (Spec: "Discord roles").
+// returns the announcement and role changes (Spec: "Discord roles"). `req`
+// carries who decided and when, for requests a disband makes outdated.
 async function apply(guildId: string, league: League, req: RosterRequest, gym: Gym): Promise<Applied> {
   const change = parseChange(req.change);
   const { roles } = getLeagueConfig();
@@ -201,9 +230,58 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
         roles: [target, ...otherRoles],
       };
     }
-    default:
-      throw new Error(`approving ${req.type} requests isn't built yet`);
+    case 'rebrand': {
+      // Every other tab refers to the gym by gym_id, so only the Gyms row changes.
+      const rebranded: Gym = { ...gym, name: change.name, abbreviation: change.abbreviation, emote: sheetEmote(change.emote) };
+      await updateGym(league, rebranded);
+      return {
+        announcement: `${gymLine} has rebranded to ${change.emote} **${change.name}**`,
+        roles: [],
+        // Renamed, not replaced: members keep the role, and any channel access it grants.
+        renames: [
+          { from: gym.name, to: change.name },
+          { from: `${gym.name}${FAN_SUFFIX}`, to: `${change.name}${FAN_SUFFIX}`, optional: true },
+        ],
+      };
+    }
+    case 'disband': {
+      const members = league.trainers.map((t) => t.values).filter((t) => t.gym_id === gym.gym_id);
+      await writeTrainers(guildId, league, req, members.map((t) => ({
+        discordId: t.discord_id,
+        set: { gym_id: '', role: 'trainer', leadership: 'none' },
+      })));
+      await updateGym(league, { ...gym, status: 'inactive' });
+      // The gym's other pending requests can no longer be approved.
+      const outdated = league.requests
+        .filter((r) => r.values.gym_id === gym.gym_id && r.values.status === 'pending' && r.values.request_id !== req.request_id)
+        .map((r) => ({
+          rowNumber: r.rowNumber,
+          values: {
+            ...r.values,
+            status: 'outdated',
+            decided_by: req.decided_by,
+            decided_at: req.decided_at,
+            refusal_message: `${gym.name} was disbanded (${req.request_id}).`,
+          },
+        }));
+      await updateRows('rosterRequests', outdated);
+      return {
+        announcement: `${gymLine} has disbanded`,
+        // The gym role itself is kept; members keep Participating Trainer, as on a remove.
+        roles: members.map((t) => ({
+          userId: t.discord_id,
+          add: [],
+          remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer],
+        })),
+        outdated: outdated.map((r) => r.values),
+      };
+    }
   }
+}
+
+async function updateGym(league: League, gym: Gym): Promise<void> {
+  const row = league.gyms.find((g) => g.values.gym_id === gym.gym_id)!;
+  await updateRows('gyms', [{ rowNumber: row.rowNumber, values: gym }]);
 }
 
 interface TrainerChange {

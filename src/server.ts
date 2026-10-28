@@ -5,6 +5,7 @@ import {
   InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
+import { handleDisbandButton } from './commands/gym.js';
 import { deferredCommands } from './commands/index.js';
 import { runDeferred, runDeferredUpdate } from './interactions.js';
 import { handleDecision } from './roster/approval.js';
@@ -52,6 +53,12 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
     /^(approve|reject):/.test(interaction.data.custom_id)
   ) {
     runDeferredUpdate(res, interaction, handleDecision);
+    return;
+  }
+
+  // The two confirm prompts of /gym disband.
+  if (interaction.type === InteractionType.MESSAGE_COMPONENT && interaction.data.custom_id.startsWith('disband:')) {
+    runDeferredUpdate(res, interaction, handleDisbandButton);
     return;
   }
 

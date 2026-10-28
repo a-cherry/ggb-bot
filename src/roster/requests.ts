@@ -14,17 +14,15 @@ export function nextRequestId(league: League): string {
   return `R${String(max + 1).padStart(4, '0')}`;
 }
 
-// The `change` column: "key: value" pairs joined by "; ", e.g. "role: non-playing".
+// The `change` column: a JSON object, e.g. {"role":"non-playing"}, blank when
+// empty. JSON because a rebrand's gym name can hold any character.
 export const formatChange = (change: Record<string, string>) =>
-  Object.entries(change).map(([k, v]) => `${k}: ${v}`).join('; ');
+  Object.keys(change).length ? JSON.stringify(change) : '';
 
-export const parseChange = (change: string): Record<string, string> =>
-  Object.fromEntries(
-    change.split('; ').filter(Boolean).map((pair) => {
-      const i = pair.indexOf(': ');
-      return [pair.slice(0, i), pair.slice(i + 2)];
-    }),
-  );
+export const parseChange = (change: string): Record<string, string> => (change ? JSON.parse(change) : {});
+
+// Rebrand and disband change the gym itself and have no target trainer.
+export const isGymRequest = (type: string) => type === 'rebrand' || type === 'disband';
 
 // A role or leadership value as staff and trainers know it: the Discord role name.
 export function roleLabel(value: string): string {
@@ -61,6 +59,10 @@ export function describeChange(req: RosterRequest, gym: string): string {
       return `remove ${mention(req.target)} from ${gym}`;
     case 'update-trainer':
       return `promote ${mention(req.target)} to ${promotionLabel(req)}`;
+    case 'rebrand':
+      return `rebrand ${gym} to ${change.emote} **${change.name}** (${change.abbreviation})`;
+    case 'disband':
+      return `disband ${gym}`;
     default:
       return `${req.type} ${req.change}`;
   }
@@ -113,11 +115,12 @@ export const approvalButtons = (requestId: string, disabled = false): ActionRow[
   },
 ];
 
-export function cardText(req: RosterRequest, gym: string, targetName: string, warnings: string[]): string {
+// `targetName` is undefined for a rebrand or disband, which have no target trainer.
+export function cardText(req: RosterRequest, gym: string, targetName: string | undefined, warnings: string[]): string {
   return [
     `**Roster request ${req.request_id}**`,
     `Requester: ${mention(req.requester)}`,
-    `Trainer: ${mention(req.target)} (${targetName})`,
+    ...(targetName === undefined ? [] : [`Trainer: ${mention(req.target)} (${targetName})`]),
     `Gym: ${gym}`,
     `Change: ${describeChange(req, gym)}`,
     ...warnings.map((w) => `Warning: ${w}`),

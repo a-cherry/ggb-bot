@@ -4,7 +4,7 @@
 // result when the handler finishes.
 import { InteractionResponseFlags, InteractionResponseType } from 'discord-interactions';
 import type { Response } from 'express';
-import { editOriginalResponse, postFollowup, type Member } from './discord.js';
+import { editOriginalResponse, postFollowup, type ActionRow, type Member } from './discord.js';
 
 // The fields of an application command interaction the bot uses.
 export interface CommandInteraction {
@@ -30,10 +30,11 @@ export interface CommandOption {
   options?: CommandOption[];
 }
 
-// The reply is shown only to the person who ran the command. A public message,
-// if any, is posted in the same channel after it.
+// The reply is shown only to the person who ran the command, with any buttons.
+// A public message, if any, is posted in the same channel after it.
 export interface CommandResult {
   reply: string;
+  components?: ActionRow[];
   publicMessage?: string;
 }
 
@@ -57,7 +58,7 @@ export function runDeferred(res: Response, interaction: CommandInteraction, hand
     // The private reply goes first: a follow-up sent while the reply is still
     // "thinking" would replace it and be private too.
     try {
-      await editOriginalResponse(interaction.application_id, interaction.token, result.reply);
+      await editOriginalResponse(interaction.application_id, interaction.token, result.reply, result.components);
       if (result.publicMessage) {
         await postFollowup(interaction.application_id, interaction.token, result.publicMessage);
       }
@@ -77,11 +78,14 @@ export interface ComponentInteraction {
   message: { id: string; content: string };
 }
 
-// `message` replaces the text of the message the button is on and removes its
-// buttons; `reply` is shown only to the person who pressed it.
+// `message` replaces the text of the message the button is on, with
+// `components` as its new buttons (none when left out); `reply` is shown only to
+// the person who pressed it; `publicMessage` is posted in the channel.
 export interface ComponentResult {
   message?: string;
+  components?: ActionRow[];
   reply?: string;
+  publicMessage?: string;
 }
 
 export type ComponentHandler = (interaction: ComponentInteraction) => Promise<ComponentResult>;
@@ -100,9 +104,10 @@ export function runDeferredUpdate(res: Response, interaction: ComponentInteracti
     }
     try {
       if (result.message !== undefined) {
-        await editOriginalResponse(interaction.application_id, interaction.token, result.message, []);
+        await editOriginalResponse(interaction.application_id, interaction.token, result.message, result.components ?? []);
       }
       if (result.reply) await postFollowup(interaction.application_id, interaction.token, result.reply, true);
+      if (result.publicMessage) await postFollowup(interaction.application_id, interaction.token, result.publicMessage);
     } catch (err) {
       console.error(`button ${interaction.data.custom_id}: could not send the result:`, err);
     }

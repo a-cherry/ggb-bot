@@ -2,7 +2,10 @@
 // or undefined when the check passes. Approval runs the same checks again.
 import { formatDate, isInSeason } from '../seasons.js';
 import { findGym, findTrainer, gymName, mention, seasonMoves, type Gym, type League, type Trainer } from './league.js';
-import { roleLabel, type RequestType } from './requests.js';
+import { isGymRequest, roleLabel, type RequestType } from './requests.js';
+
+// A gym's fan role is its gym role's name plus this (Spec: "Initial population").
+export const FAN_SUFFIX = ' Fan';
 
 export type Leadership = 'leader' | 'manager';
 
@@ -34,8 +37,10 @@ export function checkRequester(league: League, discordId: string, allowed: Leade
   return { trainer, gym };
 }
 
-// Who may make a request. A remove of the manager, and any leadership change, is the leader's alone.
+// Who may make a request. A remove of the manager, any leadership change, a
+// rebrand and a disband are the leader's alone.
 export function leadershipFor(type: RequestType, change: Record<string, string>, target: Trainer | undefined): Leadership[] {
+  if (type === 'rebrand' || type === 'disband') return ['leader'];
   if (type === 'remove' && target?.leadership === 'manager') return ['leader'];
   if (type === 'update-trainer' && change.leadership) return ['leader'];
   return ['leader', 'manager'];
@@ -155,4 +160,50 @@ export function checkAdd(league: League, targetId: string, gym: Gym, role: strin
     (role === 'non-playing' ? checkNonPlaying(league, targetId, gym) : undefined) ??
     checkNoPendingRequest(league, targetId, exceptRequestId)
   );
+}
+
+export function checkOffSeason(league: League): string | undefined {
+  if (!isInSeason(league.season, league.today)) return undefined;
+  return `Rebrands and disbands are off-season only.`;
+}
+
+// At most one pending rebrand or disband per gym, as a trainer has at most one pending request.
+export function checkNoPendingGymRequest(league: League, gym: Gym, exceptRequestId?: string): string | undefined {
+  const pending = league.requests
+    .map((r) => r.values)
+    .find((r) => r.gym_id === gym.gym_id && isGymRequest(r.type) && r.status === 'pending' && r.request_id !== exceptRequestId);
+  if (!pending) return undefined;
+  return `${gym.name} already has a pending ${pending.type} request, ${pending.request_id}. Staff must decide it, or you can cancel it with /gym cancel-request, first.`;
+}
+
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+// `change` holds the new name, abbreviation and emote. `roleNames` are the
+// server's Discord roles: the gym's roles are renamed to the new name, so it
+// can't match another role, or a gym role named "Referee" would pass the staff check.
+export function checkRebrand(
+  league: League, gym: Gym, change: Record<string, string>, roleNames: string[], exceptRequestId?: string,
+): string | undefined {
+  const offSeason = checkOffSeason(league);
+  if (offSeason) return offSeason;
+  for (const { values: other } of league.gyms) {
+    if (other.gym_id === gym.gym_id) continue;
+    if ((other.status === 'active' || other.status === 'relegated') && same(other.name, change.name)) {
+      return `The name ${other.name} is already taken by another gym.`;
+    }
+    if (other.status === 'active' && other.abbreviation && same(other.abbreviation, change.abbreviation)) {
+      return `The abbreviation ${other.abbreviation} is taken by ${other.name}.`;
+    }
+  }
+  const own = [gym.name, `${gym.name}${FAN_SUFFIX}`];
+  for (const name of [change.name, `${change.name}${FAN_SUFFIX}`]) {
+    if (roleNames.some((r) => same(r, name) && !own.some((o) => same(o, r)))) {
+      return `Gyms cannot be named after GGB staff roles.`;
+    }
+  }
+  return checkNoPendingGymRequest(league, gym, exceptRequestId);
+}
+
+export function checkDisband(league: League, gym: Gym, exceptRequestId?: string): string | undefined {
+  return checkOffSeason(league) ?? checkNoPendingGymRequest(league, gym, exceptRequestId);
 }

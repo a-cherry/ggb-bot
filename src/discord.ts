@@ -77,8 +77,8 @@ export interface Emoji {
 
 let emojiCache: { guildId: string; at: number; emojis: Emoji[] } | undefined;
 
-async function cachedEmojis(guildId: string): Promise<Emoji[]> {
-  if (!emojiCache || emojiCache.guildId !== guildId || Date.now() - emojiCache.at > ROLE_CACHE_MS) {
+async function cachedEmojis(guildId: string, refresh = false): Promise<Emoji[]> {
+  if (refresh || !emojiCache || emojiCache.guildId !== guildId || Date.now() - emojiCache.at > ROLE_CACHE_MS) {
     emojiCache = { guildId, at: Date.now(), emojis: await call<Emoji[]>('GET', `/guilds/${guildId}/emojis`) };
   }
   return emojiCache.emojis;
@@ -94,6 +94,34 @@ export async function renderEmote(guildId: string, emote: string): Promise<strin
   const emoji = (await cachedEmojis(guildId)).find((e) => e.name === name);
   return emoji ? `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>` : emote.trim();
 }
+
+// A rebrand's gym emote, from what the leader typed: one of this server's custom
+// emotes (sent by Discord as <:phx:123...>, or typed as :phx:) or a Unicode emoji.
+// `sheet` is the Gyms emote cell, as staff would type it; `display` renders in a
+// message. Undefined when it's neither.
+export async function parseEmote(guildId: string, input: string): Promise<{ sheet: string; display: string } | undefined> {
+  const text = input.trim();
+  const name = /^<a?:([\w~]+):\d+>$/.exec(text)?.[1] ?? /^:([\w~]+):$/.exec(text)?.[1];
+  if (name) {
+    // A miss re-reads at once, in case staff just uploaded it.
+    const find = (emojis: Emoji[]) => emojis.find((e) => e.name === name);
+    const emoji = find(await cachedEmojis(guildId)) ?? find(await cachedEmojis(guildId, true));
+    return emoji ? { sheet: `:${emoji.name}:`, display: `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>` } : undefined;
+  }
+  // One emoji, possibly with modifiers or joined (flags, skin tones, families).
+  if (/^\p{Extended_Pictographic}|^\p{Regional_Indicator}/u.test(text) && !/[\p{L}\p{N}\s]/u.test(text) && text.length <= 16) {
+    return { sheet: text, display: text };
+  }
+  return undefined;
+}
+
+// A rendered custom emote, <:phx:123...>, as staff type it in the Gyms tab: :phx:.
+// Anything else is returned as is.
+export const sheetEmote = (emote: string) => emote.replace(/^<a?:([\w~]+):\d+>$/, ':$1:');
+
+// Needs Manage Roles, and the role must sit below the bot's highest role.
+export const renameRole = (guildId: string, roleId: string, name: string) =>
+  call<Role>('PATCH', `/guilds/${guildId}/roles/${roleId}`, { name });
 
 // Needs Manage Roles, and the role must sit below the bot's highest role.
 export const addMemberRole = (guildId: string, userId: string, roleId: string) =>
