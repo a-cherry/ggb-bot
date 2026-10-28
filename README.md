@@ -15,15 +15,18 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 | Path | Purpose |
 |---|---|
 | `src/server.ts` | Express server: `POST /interactions` (signature-verified), `GET /health` |
-| `src/interactions.ts` | Deferred slash command replies: answer "thinking" at once, fill in the reply later |
+| `src/interactions.ts` | Deferred slash command replies and button presses: acknowledge at once, fill in the result later |
 | `src/commands/` | Slash command definitions and handlers (`index.ts` lists them all) |
 | `src/sheet-rows.ts` | Typed read, append and update of League DB rows |
 | `src/seasons.ts` | Active season and in season vs off-season |
+| `src/roster/` | Roster requests: League DB reads, request checks, request rows and cards, approval |
+| `src/locks.ts` | In-memory locks (request IDs, one approval per gym at a time) |
+| `src/views.ts` | League Stats views rebuild (empty until the views are built) |
 | `src/google.ts` | Sheets and Drive clients for the service account |
 | `src/schema.ts` | Every League DB tab and its columns, from the Spec |
 | `src/league-db.ts` | Checks the League DB tabs against the schema |
 | `src/discord.ts` | Discord REST calls: roles, members, messages, deferred replies |
-| `src/config.ts` | Loads `config/league.json`: import role names, S4 relegated gyms |
+| `src/config.ts` | Loads `config/league.json`: import and staff role names, S4 relegated gyms |
 | `scripts/import.ts`, `scripts/import/` | The one-shot import of gyms and trainers |
 | `scripts/register-commands.ts` | Registers the slash commands in `src/commands/` to the dev guild |
 | `scripts/db-setup.ts` | Builds all League DB tabs in an empty workbook |

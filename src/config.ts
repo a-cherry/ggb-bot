@@ -8,6 +8,8 @@ export interface LeagueConfig {
     gymManager: string;
     nonPlayer: string;
   };
+  // Members with any of these Discord roles may approve or reject roster requests.
+  staffRoles: string[];
   relegatedGyms: string[];
 }
 

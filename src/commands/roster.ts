@@ -124,8 +124,7 @@ const whoami: CommandHandler = async ({ member }) => {
     const t = trainer.values;
     const gym = gyms.find((g) => g.values.gym_id === t.gym_id);
     lines.push(
-      `Trainers row ${trainer.rowNumber}: ${t.server_nickname} (${t.username}), status ${t.status}`,
-      `Gym: ${t.gym_id ? `${t.gym_id} ${gym ? `${gym.values.name} (${gym.values.status})` : '(no such gym)'}` : 'none'}`,
+      `Gym: ${t.gym_id ? `${gym ? `${gym.values.name}` : '(no such gym)'}` : 'none'}`,
       `Role ${t.role}, leadership ${t.leadership}`,
     );
   }

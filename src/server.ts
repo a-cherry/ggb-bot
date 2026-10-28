@@ -2,12 +2,12 @@ import 'dotenv/config';
 import express from 'express';
 import {
   InteractionType,
-  InteractionResponseFlags,
   InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
 import { deferredCommands } from './commands/index.js';
-import { runDeferred } from './interactions.js';
+import { runDeferred, runDeferredUpdate } from './interactions.js';
+import { handleDecision } from './roster/approval.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const publicKey = process.env.DISCORD_PUBLIC_KEY;
@@ -46,12 +46,12 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
     }
   }
 
-  // Approve and Reject on approval cards. Not built yet (step 3).
-  if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
-    res.send({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: { content: "Approve and Reject aren't built yet.", flags: InteractionResponseFlags.EPHEMERAL },
-    });
+  // Approve and Reject on staff approval cards.
+  if (
+    interaction.type === InteractionType.MESSAGE_COMPONENT &&
+    /^(approve|reject):/.test(interaction.data.custom_id)
+  ) {
+    runDeferredUpdate(res, interaction, handleDecision);
     return;
   }
 

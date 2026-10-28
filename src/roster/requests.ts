@@ -1,6 +1,6 @@
 // Roster requests rows and their staff approval cards (Spec: "Roster requests", "Approval").
 import { getLeagueConfig } from '../config.js';
-import { listRoles, postMessage, type ActionRow, type Role } from '../discord.js';
+import { cachedRoles, postMessage, type ActionRow } from '../discord.js';
 import type { Row } from '../sheet-rows.js';
 import { mention, type League } from './league.js';
 
@@ -50,17 +50,10 @@ export function describeChange(req: RosterRequest, gym: string): string {
   }
 }
 
-// Server roles change rarely; re-read them at most every 10 minutes.
-const ROLE_CACHE_MS = 10 * 60 * 1000;
-let roleCache: { guildId: string; at: number; roles: Role[] } | undefined;
-
 // The gym's Discord role as a mention (shown as @Phoenix, never pinging),
 // matched by exact name as in the import. Falls back to the plain name.
 export async function gymMention(guildId: string, gymName: string): Promise<string> {
-  if (!roleCache || roleCache.guildId !== guildId || Date.now() - roleCache.at > ROLE_CACHE_MS) {
-    roleCache = { guildId, at: Date.now(), roles: await listRoles(guildId) };
-  }
-  const role = roleCache.roles.find((r) => r.name === gymName);
+  const role = (await cachedRoles(guildId)).find((r) => r.name === gymName);
   return role ? `<@&${role.id}>` : gymName;
 }
 
