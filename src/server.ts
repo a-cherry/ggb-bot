@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import {
   InteractionType,
+  InteractionResponseFlags,
   InteractionResponseType,
   verifyKeyMiddleware,
 } from 'discord-interactions';
@@ -43,6 +44,15 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
       runDeferred(res, interaction, handler);
       return;
     }
+  }
+
+  // Approve and Reject on approval cards. Not built yet (step 3).
+  if (interaction.type === InteractionType.MESSAGE_COMPONENT) {
+    res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { content: "Approve and Reject aren't built yet.", flags: InteractionResponseFlags.EPHEMERAL },
+    });
+    return;
   }
 
   res.status(400).send({ error: 'unknown interaction' });

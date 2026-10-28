@@ -4,7 +4,7 @@
 // reply when the handler finishes.
 import { InteractionResponseFlags, InteractionResponseType } from 'discord-interactions';
 import type { Response } from 'express';
-import { editOriginalResponse, type Member } from './discord.js';
+import { editOriginalResponse, postFollowup, type Member } from './discord.js';
 
 // The fields of an application command interaction the bot uses.
 export interface CommandInteraction {
@@ -30,8 +30,14 @@ export interface CommandOption {
   options?: CommandOption[];
 }
 
-// Returns the reply text, shown only to the person who ran the command.
-export type CommandHandler = (interaction: CommandInteraction) => Promise<string>;
+// The reply is shown only to the person who ran the command. A public message,
+// if any, is posted in the same channel after it.
+export interface CommandResult {
+  reply: string;
+  publicMessage?: string;
+}
+
+export type CommandHandler = (interaction: CommandInteraction) => Promise<string | CommandResult>;
 
 export function runDeferred(res: Response, interaction: CommandInteraction, handler: CommandHandler): void {
   res.send({
@@ -40,15 +46,21 @@ export function runDeferred(res: Response, interaction: CommandInteraction, hand
   });
 
   void (async () => {
-    let reply: string;
+    let result: CommandResult;
     try {
-      reply = await handler(interaction);
+      const r = await handler(interaction);
+      result = typeof r === 'string' ? { reply: r } : r;
     } catch (err) {
       console.error(`/${interaction.data.name} failed:`, err);
-      reply = 'Something went wrong on the bot side. Please tell staff.';
+      result = { reply: 'Something went wrong on the bot side. Please tell staff.' };
     }
+    // The private reply goes first: a follow-up sent while the reply is still
+    // "thinking" would replace it and be private too.
     try {
-      await editOriginalResponse(interaction.application_id, interaction.token, reply);
+      await editOriginalResponse(interaction.application_id, interaction.token, result.reply);
+      if (result.publicMessage) {
+        await postFollowup(interaction.application_id, interaction.token, result.publicMessage);
+      }
     } catch (err) {
       console.error(`/${interaction.data.name}: could not send the reply:`, err);
     }

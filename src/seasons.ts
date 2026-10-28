@@ -24,6 +24,13 @@ export function sheetDate(value: string): string {
 
 export const todayUtc = () => new Date().toISOString().slice(0, 10);
 
+// A YYYY-MM-DD date as shown in Discord: "October 10, 2026". Written out because
+// the league is international and 10/11/2026 reads differently by country.
+export const formatDate = (isoDate: string) =>
+  new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', {
+    timeZone: 'UTC', month: 'long', day: 'numeric', year: 'numeric',
+  });
+
 // The Seasons row marked active, if any. More than one is a sheet mistake staff must fix.
 export function activeSeason(rows: SheetRow<'seasons'>[]): Season | undefined {
   const active = rows.filter((r) => r.values.active.toLowerCase() === 'true');

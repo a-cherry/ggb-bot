@@ -63,9 +63,15 @@ export async function listMembers(guildId: string): Promise<Member[]> {
   }
 }
 
+// Message buttons and the rows that hold them (Discord "components").
+export interface ActionRow {
+  type: 1;
+  components: { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string; disabled?: boolean }[];
+}
+
 // Mentions render as names but never ping anyone.
-export const postMessage = (channelId: string, content: string) =>
-  call('POST', `/channels/${channelId}/messages`, { content, allowed_mentions: { parse: [] } });
+export const postMessage = (channelId: string, content: string, components?: ActionRow[]) =>
+  call('POST', `/channels/${channelId}/messages`, { content, components, allowed_mentions: { parse: [] } });
 
 // Fills in a deferred interaction reply. The interaction token is valid for 15 minutes.
 export const editOriginalResponse = (applicationId: string, token: string, content: string) =>
@@ -73,6 +79,11 @@ export const editOriginalResponse = (applicationId: string, token: string, conte
     content,
     allowed_mentions: { parse: [] },
   });
+
+// A public message in the channel where a command ran, after its deferred
+// (private) reply. Needs no channel permission: it goes through the interaction.
+export const postFollowup = (applicationId: string, token: string, content: string) =>
+  call('POST', `/webhooks/${applicationId}/${token}`, { content, allowed_mentions: { parse: [] } });
 
 // The name a member shows in the server: nickname, else global display name, else username.
 export const displayName = (m: Member) => m.nick ?? m.user.global_name ?? m.user.username;
