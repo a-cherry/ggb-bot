@@ -1,11 +1,15 @@
 // Request-time checks (Spec: "Roster requests"). Each returns the refusal message,
 // or undefined when the check passes. Approval runs the same checks again.
-import { formatDate } from '../seasons.js';
+import { formatDate, isInSeason } from '../seasons.js';
 import { findGym, findTrainer, gymName, mention, seasonMoves, type Gym, type League, type Trainer } from './league.js';
+import { roleLabel, type RequestType } from './requests.js';
 
 export type Leadership = 'leader' | 'manager';
 
 export const MAX_NON_PLAYING = 3;
+
+// In season, a remove that leaves fewer participating trainers than this gets a warning on the card.
+export const MIN_TRAINERS = 8;
 
 export type RequesterResult = { trainer: Trainer; gym: Gym } | { refusal: string };
 
@@ -30,12 +34,32 @@ export function checkRequester(league: League, discordId: string, allowed: Leade
   return { trainer, gym };
 }
 
+// Who may make a request. A remove of the manager, and any leadership change, is the leader's alone.
+export function leadershipFor(type: RequestType, change: Record<string, string>, target: Trainer | undefined): Leadership[] {
+  if (type === 'remove' && target?.leadership === 'manager') return ['leader'];
+  if (type === 'update-trainer' && change.leadership) return ['leader'];
+  return ['leader', 'manager'];
+}
+
 export function checkTargetHasNoGym(league: League, targetId: string, gym: Gym): string | undefined {
   const target = findTrainer(league, targetId);
   if (!target?.gym_id) return undefined;
   if (target.gym_id === gym.gym_id) return `${mention(targetId)} is already on ${gym.name}.`;
   const theirs = gymName(league, target.gym_id);
   return `${mention(targetId)} is on ${theirs}. ${theirs}'s leader or manager must remove them first.`;
+}
+
+export function checkTargetOnGym(league: League, targetId: string, gym: Gym): string | undefined {
+  const theirs = findTrainer(league, targetId)?.gym_id;
+  if (theirs === gym.gym_id) return undefined;
+  if (!theirs) return `${mention(targetId)} isn't on ${gym.name}.`;
+  return `${mention(targetId)} is on ${gymName(league, theirs)}, not ${gym.name}.`;
+}
+
+// The leader can't be removed or step down; they hand leadership to someone else first.
+export function checkTargetNotLeader(league: League, targetId: string, gym: Gym): string | undefined {
+  if (findTrainer(league, targetId)?.leadership !== 'leader') return undefined;
+  return `${mention(targetId)} is ${gym.name}'s ${roleLabel('leader')}. They must hand leadership to someone else first, with /roster update-trainer leadership:leader.`;
 }
 
 export function checkTargetStatus(league: League, targetId: string): string | undefined {
@@ -76,6 +100,51 @@ export function checkNoPendingRequest(league: League, targetId: string, exceptRe
     .find((r) => r.target === targetId && r.status === 'pending' && r.request_id !== exceptRequestId);
   if (!pending) return undefined;
   return `${mention(targetId)} already has a pending request, ${pending.request_id} (${pending.type} for ${gymName(league, pending.gym_id)}). Staff must decide it, or its requester can cancel it, first.`;
+}
+
+export function checkRemove(league: League, targetId: string, gym: Gym, exceptRequestId?: string): string | undefined {
+  return (
+    checkTargetOnGym(league, targetId, gym) ??
+    checkTargetNotLeader(league, targetId, gym) ??
+    checkNoPendingRequest(league, targetId, exceptRequestId)
+  );
+}
+
+// `change` holds role and/or leadership, each only when it changes something.
+export function checkUpdate(
+  league: League, targetId: string, gym: Gym, change: Record<string, string>, exceptRequestId?: string,
+): string | undefined {
+  const onGym = checkTargetOnGym(league, targetId, gym);
+  if (onGym) return onGym;
+  const target = findTrainer(league, targetId)!;
+  if (change.leadership && change.leadership !== 'leader') {
+    const leader = checkTargetNotLeader(league, targetId, gym);
+    if (leader) return leader;
+  }
+  if (change.role === target.role) return `${mention(targetId)} is already ${roleLabel(target.role)}.`;
+  if (change.leadership === 'none' && target.leadership !== 'manager') {
+    return `${mention(targetId)} isn't ${gym.name}'s ${roleLabel('manager')}.`;
+  }
+  if (change.leadership && change.leadership === target.leadership) {
+    return `${mention(targetId)} is already ${gym.name}'s ${roleLabel(target.leadership)}.`;
+  }
+  return (
+    (change.leadership === 'leader' || change.leadership === 'manager' ? checkTargetStatus(league, targetId) : undefined) ??
+    (change.role === 'non-playing' ? checkNonPlaying(league, targetId, gym) : undefined) ??
+    checkNoPendingRequest(league, targetId, exceptRequestId)
+  );
+}
+
+// Card warnings for a remove (Spec: "Shown as a warning on the staff card").
+export function removeWarnings(league: League, targetId: string, gym: Gym): string[] {
+  if (!isInSeason(league.season, league.today)) return [];
+  if (findTrainer(league, targetId)?.role !== 'trainer') return [];
+  const left = league.trainers.filter(
+    (t) => t.values.gym_id === gym.gym_id && t.values.role === 'trainer' && t.values.discord_id !== targetId,
+  ).length;
+  if (left >= MIN_TRAINERS) return [];
+  const trainers = left === 1 ? 'participating trainer' : 'participating trainers';
+  return [`${gym.name} would have ${left} ${trainers}, under the ${MIN_TRAINERS} needed in season.`];
 }
 
 export function checkAdd(league: League, targetId: string, gym: Gym, role: string, exceptRequestId?: string): string | undefined {

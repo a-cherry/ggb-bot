@@ -1,14 +1,14 @@
 // Approve and Reject on a staff approval card (Spec: "Approval").
 import { getLeagueConfig } from '../config.js';
-import { cachedRoles, displayName, getMember, postMessage, type Member } from '../discord.js';
+import { cachedRoles, displayName, getMember, postMessage, renderEmote, type Member } from '../discord.js';
 import type { ComponentHandler, ComponentInteraction, ComponentResult } from '../interactions.js';
 import { withLock } from '../locks.js';
 import { appendRows, readTabs, updateRows, type Row, type SheetRow } from '../sheet-rows.js';
 import { rebuildViews } from '../views.js';
-import { checkAdd, checkRequester, type Leadership } from './checks.js';
+import { checkAdd, checkRemove, checkRequester, checkUpdate, leadershipFor } from './checks.js';
 import { applyRoleChanges, type RoleChange } from './discord-roles.js';
-import { findGym, gymName, loadLeague, mention, type Gym, type League } from './league.js';
-import { parseChange, type RequestType, type RosterRequest } from './requests.js';
+import { findGym, gymName, loadLeague, mention, type Gym, type League, type Trainer } from './league.js';
+import { parseChange, promotionLabel, type RequestType, type RosterRequest } from './requests.js';
 
 async function isStaff(guildId: string, member: Member): Promise<boolean> {
   const staff = new Set(getLeagueConfig().staffRoles);
@@ -85,15 +85,6 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   return roleFailure ? { message: `${result.message}\nDiscord roles not updated: ${roleFailure}` } : result;
 }
 
-function requiredLeadership(req: RosterRequest): Leadership[] {
-  switch (req.type as RequestType) {
-    case 'add':
-      return ['leader', 'manager'];
-    default:
-      throw new Error(`approving ${req.type} requests isn't built yet`);
-  }
-}
-
 // A member with no Trainers row compares as the row an add would create for them.
 const NO_ROW = { gym_id: '', role: 'trainer', leadership: 'none', status: 'active' };
 
@@ -117,7 +108,8 @@ function outdatedReason(league: League, req: RosterRequest): string | undefined 
     .map(([name, before, after, fmt]) => `${name} changed from ${fmt(before)} to ${fmt(after)}`);
   if (changed.length) return `${mention(req.target)}'s ${changed.join(', ')} since the request was made.`;
 
-  const requester = checkRequester(league, req.requester, requiredLeadership(req));
+  const allowed = leadershipFor(req.type as RequestType, parseChange(req.change), row);
+  const requester = checkRequester(league, req.requester, allowed);
   if ('refusal' in requester || requester.gym.gym_id !== req.gym_id) {
     return `${mention(req.requester)} can no longer make this request for ${gymName(league, req.gym_id)}.`;
   }
@@ -129,6 +121,10 @@ function recheck(league: League, req: RosterRequest, gym: Gym): string | undefin
   switch (req.type as RequestType) {
     case 'add':
       return checkAdd(league, req.target, gym, change.role, req.request_id);
+    case 'remove':
+      return checkRemove(league, req.target, gym, req.request_id);
+    case 'update-trainer':
+      return checkUpdate(league, req.target, gym, change, req.request_id);
     default:
       throw new Error(`approving ${req.type} requests isn't built yet`);
   }
@@ -140,30 +136,18 @@ interface Applied {
 }
 
 // Writes Roster history and Trainers (Spec: "What each change writes") and
-// returns the announcement and role changes. Names are refreshed from Discord
-// in the same write (Spec: "Refresh on touch").
+// returns the announcement and role changes (Spec: "Discord roles").
 async function apply(guildId: string, league: League, req: RosterRequest, gym: Gym): Promise<Applied> {
   const change = parseChange(req.change);
+  const { roles } = getLeagueConfig();
+  const gymLine = `${await emotePrefix(guildId, gym)}**${gym.name}**`;
   switch (req.type as RequestType) {
     case 'add': {
-      const existing = league.trainers.find((t) => t.values.discord_id === req.target);
-      const before = existing?.values;
-      const member = await getMember(guildId, req.target);
-      const after: Row<'trainers'> = {
-        discord_id: req.target,
-        server_nickname: member ? displayName(member) : before?.server_nickname ?? '',
-        username: member ? member.user.username : before?.username ?? '',
-        country: before?.country ?? '',
-        gym_id: gym.gym_id,
-        role: change.role,
-        leadership: 'none',
-        status: before?.status ?? 'active',
-      };
-      await appendRows('rosterHistory', [historyRow(league, req, before, after)]);
-      await writeTrainer(existing, after);
-      const { roles } = getLeagueConfig();
+      await writeTrainers(guildId, league, req, [
+        { discordId: req.target, set: { gym_id: gym.gym_id, role: change.role, leadership: 'none' } },
+      ]);
       return {
-        announcement: `${emotePrefix(gym)}**${gym.name}** has added ${mention(req.target)} to their roster`,
+        announcement: `${gymLine} has added ${mention(req.target)} to their roster`,
         roles: [{
           userId: req.target,
           add: [gym.name, roles.participatingTrainer, ...(change.role === 'non-playing' ? [roles.nonPlayer] : [])],
@@ -171,13 +155,92 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
         }],
       };
     }
+    case 'remove': {
+      await writeTrainers(guildId, league, req, [
+        { discordId: req.target, set: { gym_id: '', role: 'trainer', leadership: 'none' } },
+      ]);
+      return {
+        announcement: `${gymLine} has removed ${mention(req.target)} from their roster`,
+        // They keep Participating Trainer: with no gym role, that reads as a free agent.
+        roles: [{ userId: req.target, add: [], remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer] }],
+      };
+    }
+    case 'update-trainer': {
+      const set: Partial<Trainer> = {};
+      const target: RoleChange = { userId: req.target, add: [], remove: [] };
+      const others: TrainerChange[] = [];
+      const otherRoles: RoleChange[] = [];
+      if (change.role) {
+        set.role = change.role;
+        (change.role === 'non-playing' ? target.add : target.remove).push(roles.nonPlayer);
+      }
+      if (change.leadership === 'manager') {
+        set.leadership = 'manager';
+        target.add.push(roles.gymManager);
+        // The current manager steps down.
+        for (const { values: t } of league.trainers) {
+          if (t.gym_id === gym.gym_id && t.leadership === 'manager' && t.discord_id !== req.target) {
+            others.push({ discordId: t.discord_id, set: { leadership: 'none' } });
+            otherRoles.push({ userId: t.discord_id, add: [], remove: [roles.gymManager] });
+          }
+        }
+      } else if (change.leadership === 'leader') {
+        set.leadership = 'leader';
+        target.add.push(roles.gymLeader);
+        target.remove.push(roles.gymManager);
+        // The requester hands off; the outdated check confirmed they're still this gym's leader.
+        others.push({ discordId: req.requester, set: { leadership: 'none' } });
+        otherRoles.push({ userId: req.requester, add: [], remove: [roles.gymLeader] });
+      } else if (change.leadership === 'none') {
+        set.leadership = 'none';
+        target.remove.push(roles.gymManager);
+      }
+      await writeTrainers(guildId, league, req, [{ discordId: req.target, set }, ...others]);
+      return {
+        announcement: `${gymLine} has promoted ${mention(req.target)} to ${promotionLabel(req)}`,
+        roles: [target, ...otherRoles],
+      };
+    }
     default:
       throw new Error(`approving ${req.type} requests isn't built yet`);
   }
 }
 
-const writeTrainer = (existing: SheetRow<'trainers'> | undefined, after: Row<'trainers'>) =>
-  existing ? updateRows('trainers', [{ rowNumber: existing.rowNumber, values: after }]) : appendRows('trainers', [after]);
+interface TrainerChange {
+  discordId: string;
+  set: Partial<Trainer>; // the columns that change
+}
+
+// One Roster history row per changed trainer, then their Trainers rows. A member
+// with no Trainers row gets one. Names are refreshed from Discord in the same
+// write (Spec: "Refresh on touch").
+async function writeTrainers(guildId: string, league: League, req: RosterRequest, changes: TrainerChange[]): Promise<void> {
+  const history: Row<'rosterHistory'>[] = [];
+  const updates: SheetRow<'trainers'>[] = [];
+  const appends: Trainer[] = [];
+  for (const c of changes) {
+    const existing = league.trainers.find((t) => t.values.discord_id === c.discordId);
+    const before = existing?.values;
+    const member = await getMember(guildId, c.discordId);
+    const after: Trainer = {
+      discord_id: c.discordId,
+      server_nickname: member ? displayName(member) : before?.server_nickname ?? '',
+      username: member ? member.user.username : before?.username ?? '',
+      country: before?.country ?? '',
+      gym_id: before?.gym_id ?? '',
+      role: before?.role ?? 'trainer',
+      leadership: before?.leadership ?? 'none',
+      status: before?.status ?? 'active',
+      ...c.set,
+    };
+    history.push(historyRow(league, req, before, after));
+    if (existing) updates.push({ rowNumber: existing.rowNumber, values: after });
+    else appends.push(after);
+  }
+  await appendRows('rosterHistory', history);
+  await updateRows('trainers', updates);
+  await appendRows('trainers', appends);
+}
 
 function historyRow(
   league: League, req: RosterRequest, before: Row<'trainers'> | undefined, after: Row<'trainers'>,
@@ -197,7 +260,7 @@ function historyRow(
   };
 }
 
-const emotePrefix = (gym: Gym) => (gym.emote ? `${gym.emote} ` : '');
+const emotePrefix = async (guildId: string, gym: Gym) => (gym.emote ? `${await renderEmote(guildId, gym.emote)} ` : '');
 
 async function announce(text: string): Promise<void> {
   const channelId = process.env.DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID;

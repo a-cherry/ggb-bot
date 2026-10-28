@@ -1,8 +1,8 @@
 // Roster requests rows and their staff approval cards (Spec: "Roster requests", "Approval").
 import { getLeagueConfig } from '../config.js';
-import { cachedRoles, postMessage, type ActionRow } from '../discord.js';
+import { cachedRoles, editMessage, listMessages, postMessage, type ActionRow } from '../discord.js';
 import type { Row } from '../sheet-rows.js';
-import { mention, type League } from './league.js';
+import { findTrainer, mention, type League } from './league.js';
 
 export type RosterRequest = Row<'rosterRequests'>;
 export type RequestType = 'add' | 'remove' | 'update-trainer' | 'rebrand' | 'disband';
@@ -38,6 +38,18 @@ export function roleLabel(value: string): string {
   return labels[value] ?? value;
 }
 
+// What an update-trainer makes the target, by Discord role name: "Gym Manager",
+// "Non-Player", "Non-Player and Gym Manager". A manager stepping down becomes
+// Participating Trainer, the role every gym member has.
+export function promotionLabel(req: RosterRequest): string {
+  const change = parseChange(req.change);
+  const labels = [
+    ...(change.role ? [roleLabel(change.role)] : []),
+    ...(change.leadership === 'leader' || change.leadership === 'manager' ? [roleLabel(change.leadership)] : []),
+  ];
+  return labels.length ? labels.join(' and ') : roleLabel('trainer');
+}
+
 // The change in one line, for the card and the replies. `gym` is how to show the
 // request's gym, usually its role mention (see gymMention).
 export function describeChange(req: RosterRequest, gym: string): string {
@@ -45,9 +57,37 @@ export function describeChange(req: RosterRequest, gym: string): string {
   switch (req.type as RequestType) {
     case 'add':
       return `add ${mention(req.target)} to ${gym} as ${roleLabel(change.role)}`;
+    case 'remove':
+      return `remove ${mention(req.target)} from ${gym}`;
+    case 'update-trainer':
+      return `promote ${mention(req.target)} to ${promotionLabel(req)}`;
     default:
       return `${req.type} ${req.change}`;
   }
+}
+
+// A new pending request, with the target's current Trainers values as its snapshot.
+export function newRequest(
+  league: League, type: RequestType, requester: string, target: string, gymId: string, change: Record<string, string>,
+): RosterRequest {
+  const current = findTrainer(league, target);
+  return {
+    request_id: nextRequestId(league),
+    type,
+    requester,
+    target,
+    gym_id: gymId,
+    change: formatChange(change),
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    decided_by: '',
+    decided_at: '',
+    refusal_message: '',
+    snapshot_gym_id: current?.gym_id ?? '',
+    snapshot_role: current?.role ?? '',
+    snapshot_leadership: current?.leadership ?? '',
+    snapshot_status: current?.status ?? '',
+  };
 }
 
 // The gym's Discord role as a mention (shown as @Phoenix, never pinging),
@@ -86,3 +126,27 @@ export function cardText(req: RosterRequest, gym: string, targetName: string, wa
 
 export const postApprovalCard = (text: string, requestId: string) =>
   postMessage(staffChannelId(), text, approvalButtons(requestId));
+
+// How many recent staff channel messages to search for a request's card.
+const CARD_SEARCH_PAGES = 5;
+
+// Replaces a request's card text and removes its buttons, e.g. on a cancel.
+// The card's message ID isn't stored, so it's found among the staff channel's
+// recent messages by its button. Returns false when it isn't found.
+export async function closeApprovalCard(requestId: string, outcome: string): Promise<boolean> {
+  const channelId = staffChannelId();
+  let before: string | undefined;
+  for (let page = 0; page < CARD_SEARCH_PAGES; page++) {
+    const messages = await listMessages(channelId, before);
+    const card = messages.find((m) =>
+      m.components?.some((row) => row.components.some((b) => b.custom_id === `approve:${requestId}`)),
+    );
+    if (card) {
+      await editMessage(channelId, card.id, `${card.content}\n${outcome}`, []);
+      return true;
+    }
+    if (messages.length < 100) return false;
+    before = messages[messages.length - 1].id;
+  }
+  return false;
+}

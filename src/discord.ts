@@ -69,6 +69,32 @@ export async function cachedRoles(guildId: string, refresh = false): Promise<Rol
   return roleCache.roles;
 }
 
+export interface Emoji {
+  id: string;
+  name: string;
+  animated?: boolean;
+}
+
+let emojiCache: { guildId: string; at: number; emojis: Emoji[] } | undefined;
+
+async function cachedEmojis(guildId: string): Promise<Emoji[]> {
+  if (!emojiCache || emojiCache.guildId !== guildId || Date.now() - emojiCache.at > ROLE_CACHE_MS) {
+    emojiCache = { guildId, at: Date.now(), emojis: await call<Emoji[]>('GET', `/guilds/${guildId}/emojis`) };
+  }
+  return emojiCache.emojis;
+}
+
+// A gym's emote column as a bot message needs it. Staff type a custom emote the
+// way they would in chat, ":phx:", but a bot must send "<:phx:123...>", so the
+// name is looked up in the server. Anything else (a Unicode emoji, or text
+// already in <:name:id> form, or a name not found) is used as is.
+export async function renderEmote(guildId: string, emote: string): Promise<string> {
+  const name = /^:([\w~]+):$/.exec(emote.trim())?.[1];
+  if (!name) return emote.trim();
+  const emoji = (await cachedEmojis(guildId)).find((e) => e.name === name);
+  return emoji ? `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>` : emote.trim();
+}
+
 // Needs Manage Roles, and the role must sit below the bot's highest role.
 export const addMemberRole = (guildId: string, userId: string, roleId: string) =>
   call<void>('PUT', `/guilds/${guildId}/members/${userId}/roles/${roleId}`);
@@ -108,6 +134,24 @@ export interface ActionRow {
 // Mentions render as names but never ping anyone.
 export const postMessage = (channelId: string, content: string, components?: ActionRow[]) =>
   call('POST', `/channels/${channelId}/messages`, { content, components, allowed_mentions: { parse: [] } });
+
+export interface Message {
+  id: string;
+  content: string;
+  components?: ActionRow[];
+}
+
+// The channel's newest 100 messages, or the 100 before `before`, newest first.
+export const listMessages = (channelId: string, before?: string) =>
+  call<Message[]>('GET', `/channels/${channelId}/messages?limit=100${before ? `&before=${before}` : ''}`);
+
+// Edits a message the bot posted. Empty `components` removes its buttons.
+export const editMessage = (channelId: string, messageId: string, content: string, components?: ActionRow[]) =>
+  call('PATCH', `/channels/${channelId}/messages/${messageId}`, {
+    content,
+    components,
+    allowed_mentions: { parse: [] },
+  });
 
 // Fills in a deferred interaction reply or, for a button press, edits the
 // message the button is on. The interaction token is valid for 15 minutes.

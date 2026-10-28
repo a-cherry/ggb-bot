@@ -119,7 +119,7 @@ The import reads the Discord member list once and writes the Gyms and Trainers t
 
 As server owner, in the Discord client:
 
-1. **Channel.** Create a private text channel `#bot-staff`. Under the channel's Permissions, add the bot with View Channel and Send Messages. Copy its ID into `DISCORD_STAFF_CHANNEL_ID`.
+1. **Channel.** Create a private text channel `#bot-staff`. Under the channel's Permissions, add the bot with View Channel, Send Messages and Read Message History (a cancelled request's card is found by reading recent messages). Copy its ID into `DISCORD_STAFF_CHANNEL_ID`.
 2. **Roles.** Create these, with no permissions (they're labels only). Names must match exactly.
 
     | Role(s) | Purpose |
@@ -176,5 +176,7 @@ Roster and gym commands work only in `#transfer-request` and `#bot-staff`. Disco
 1. Server Settings > Integrations > the bot.
 2. Open `/roster` > Add Channels, add "All Channels", `#transfer-request` and `#bot-staff`, set All Channels to ✗ and the other two to ✓, and save. Leave Role & Member Overrides empty. Do the same for `/gym` once it exists.
 3. Check from an account without Administrator. The server owner (and likely anyone with Administrator) still sees the command in every channel; that's expected.
+
+Approving a request also changes Discord roles, so the bot needs Manage Roles, with its role above every gym role, Participating Trainer, Non-Player, Gym Leader and Gym Manager and below the staff roles (Spec: "Discord roles").
 
 `/roster whoami` (temporary) shows what the bot reads about you: your Trainers row, your gym and whether today is in season.
