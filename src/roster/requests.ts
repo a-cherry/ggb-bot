@@ -39,15 +39,15 @@ export function roleLabel(value: string): string {
 }
 
 // What an update-trainer makes the target, by Discord role name: "Gym Manager",
-// "Non-Player", "Non-Player and Gym Manager". A manager stepping down becomes
-// Participating Trainer, the role every gym member has.
+// "Non-Player", "Non-Player and Gym Manager". A manager stepping down is named
+// by the role they keep: Participating Trainer, or Non-Player if non-playing.
 export function promotionLabel(req: RosterRequest): string {
   const change = parseChange(req.change);
   const labels = [
     ...(change.role ? [roleLabel(change.role)] : []),
     ...(change.leadership === 'leader' || change.leadership === 'manager' ? [roleLabel(change.leadership)] : []),
   ];
-  return labels.length ? labels.join(' and ') : roleLabel('trainer');
+  return labels.length ? labels.join(' and ') : roleLabel(req.snapshot_role || 'trainer');
 }
 
 // The change in one line, for the card and the replies. `gym` is how to show the
