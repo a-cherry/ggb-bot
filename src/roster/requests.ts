@@ -130,6 +130,8 @@ export function cardText(req: RosterRequest, gym: string, targetName: string | u
 export const postApprovalCard = (text: string, requestId: string) =>
   postMessage(staffChannelId(), text, approvalButtons(requestId));
 
+export const postStaffNotice = (text: string) => postMessage(staffChannelId(), text);
+
 // How many recent staff channel messages to search for a request's card.
 const CARD_SEARCH_PAGES = 5;
 

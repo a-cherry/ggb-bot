@@ -15,7 +15,7 @@ import {
 } from './requests.js';
 import { recoverRequest } from './recovery.js';
 
-async function isStaff(guildId: string, member: Member): Promise<boolean> {
+export async function isStaff(guildId: string, member: Member): Promise<boolean> {
   const staff = new Set(getLeagueConfig().staffRoles);
   const roles = await cachedRoles(guildId);
   return member.roles.some((id) => staff.has(roles.find((r) => r.id === id)?.name ?? ''));
@@ -136,11 +136,12 @@ function claimChange(req: RosterRequest, gym: Gym): string {
   return formatChange({ ...parseChange(req.change), old_name: gym.name, old_emote: gym.emote });
 }
 
-// For testing recovery in development. GGB_CRASH_AT=claimed, history, written
+// For testing failures in development. GGB_CRASH_AT=claimed, history, written
 // or recovery stops the bot at that point; GGB_FAIL_AT, a comma-separated list
-// of the same points, throws once at each, as a failed Sheets or Discord call would.
+// of those points or card (posting a new request's staff card), throws once at
+// each, as a failed Sheets or Discord call would.
 const failed = new Set<string>();
-export function crashPoint(point: 'claimed' | 'history' | 'written' | 'recovery'): void {
+export function crashPoint(point: 'claimed' | 'history' | 'written' | 'recovery' | 'card'): void {
   if (process.env.GGB_CRASH_AT === point) {
     console.error(`GGB_CRASH_AT=${point}: stopping the bot mid-approval`);
     process.exit(1);

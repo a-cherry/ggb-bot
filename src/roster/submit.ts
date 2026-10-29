@@ -1,11 +1,14 @@
 // Making and cancelling roster requests, shared by /roster and /gym (Spec: "Roster requests").
+import { displayName, getMember } from '../discord.js';
 import type { CommandResult } from '../interactions.js';
 import { withLock } from '../locks.js';
-import { appendRows, updateRows, type SheetRow } from '../sheet-rows.js';
-import { checkRequester, leadershipFor, type Leadership } from './checks.js';
-import { findTrainer, gymName, loadLeague, type Gym, type League, type Trainer } from './league.js';
+import { appendRows, readTabs, updateRows, type SheetRow } from '../sheet-rows.js';
+import { crashPoint } from './approval.js';
+import { checkRequester, leadershipFor, removeWarnings, type Leadership } from './checks.js';
+import { findGym, findTrainer, gymName, loadLeague, type Gym, type League, type Trainer } from './league.js';
 import {
-  cardText, closeApprovalCard, describeChange, gymMention, newRequest, postApprovalCard, type RequestType,
+  cardText, closeApprovalCard, describeChange, gymMention, isGymRequest, newRequest, postApprovalCard, postStaffNotice,
+  type RequestType,
 } from './requests.js';
 
 // Who is asking, and in which server.
@@ -47,18 +50,60 @@ export async function submit(requester: Requester, s: Submission): Promise<strin
   if (typeof result === 'string') return result;
 
   const { req, warnings, target } = result;
-  const gym = await gymMention(requester.guildId, result.gymName);
-  const change = describeChange(req, gym);
+  let gym = result.gymName; // the plain name, if the role lookup fails
   try {
+    gym = await gymMention(requester.guildId, result.gymName);
+    crashPoint('card');
     await postApprovalCard(cardText(req, gym, s.targetName?.(target), warnings), req.request_id);
   } catch (err) {
     console.error(`${req.request_id}: approval card failed to post:`, err);
-    return `Request ${req.request_id} is saved (${change}), but its staff card failed to post. Please tell staff.`;
+    return cardFailed(req.request_id, describeChange(req, gym));
   }
+  const change = describeChange(req, gym);
   return {
     reply: `Request ${req.request_id} submitted: ${change}. Staff will review it.`,
     publicMessage: `**Transfer Request**: ${change}`,
   };
+}
+
+// The request is saved but staff have no card to decide it from. Staff are told
+// in their channel and, in case that's what failed, in the public message too.
+async function cardFailed(requestId: string, change: string): Promise<CommandResult> {
+  const fix = `run /roster repost-request ${requestId} to post it again`;
+  try {
+    await postStaffNotice(`**Missing card**: request ${requestId} (${change}) is saved, but its approval card failed to post. Staff: ${fix}.`);
+  } catch (err) {
+    console.error(`${requestId}: staff notice about the missing card failed:`, err);
+  }
+  return {
+    reply: `Request ${requestId} is saved (${change}), but its staff card failed to post. Staff have been told.`,
+    publicMessage: `**Transfer Request**: ${change}\nStaff: the approval card for ${requestId} failed to post; ${fix}.`,
+  };
+}
+
+// Posts a new staff card for a pending request, e.g. one whose card failed to
+// post. An old card that still has buttons is closed first, so only one is live.
+export async function repostCard(guildId: string, requestId: string): Promise<string> {
+  const [requests] = await readTabs('rosterRequests');
+  const found = requests.find((r) => r.values.request_id === requestId);
+  if (!found) return `${requestId} isn't in the Roster requests tab.`;
+  // The gym's lock, as in approval, so the request can't be decided while its card is replaced.
+  return withLock(`gym:${found.values.gym_id}`, async () => {
+    const league = await loadLeague();
+    const req = league.requests.find((r) => r.values.request_id === requestId)!.values;
+    if (req.status !== 'pending') return `${requestId} was already ${req.status}, so there's nothing to repost.`;
+    await closeApprovalCard(requestId, '**Reposted** as a new card below');
+    const gym = findGym(league, req.gym_id);
+    const mentionText = await gymMention(guildId, gymName(league, req.gym_id));
+    let name: string | undefined;
+    if (!isGymRequest(req.type)) {
+      const member = await getMember(guildId, req.target);
+      name = member ? displayName(member) : findTrainer(league, req.target)?.server_nickname || req.target;
+    }
+    const warnings = req.type === 'remove' && gym ? removeWarnings(league, req.target, gym) : [];
+    await postApprovalCard(cardText(req, mentionText, name, warnings), requestId);
+    return `Reposted the staff card for ${requestId}.`;
+  });
 }
 
 // Marks a pending request cancelled, closes its staff card and announces the

@@ -1,10 +1,11 @@
 // /roster: roster requests from leaders and managers (Spec: "Roster requests").
 import { displayName, type Member } from '../discord.js';
 import type { CommandHandler, CommandInteraction } from '../interactions.js';
+import { isStaff } from '../roster/approval.js';
 import { checkAdd, checkRemove, checkUpdate, removeWarnings } from '../roster/checks.js';
 import { findTrainer, mention, type League, type Trainer } from '../roster/league.js';
 import { roleLabel } from '../roster/requests.js';
-import { cancel, submit, type Requester } from '../roster/submit.js';
+import { cancel, repostCard, submit, type Requester } from '../roster/submit.js';
 import { readTabs } from '../sheet-rows.js';
 
 const trainerOption = (description: string) => ({ type: 6, name: 'trainer', description, required: true });
@@ -61,6 +62,12 @@ export const rosterCommand = {
       description: "Withdraw a pending request for a trainer on your gym",
       options: [trainerOption('The trainer the request is for')],
     },
+    {
+      type: 1,
+      name: 'repost-request',
+      description: "Staff only: post a request's approval card again, e.g. when it failed to post",
+      options: [{ type: 3, name: 'request_id', description: 'The request ID, e.g. R0007', required: true }],
+    },
   ],
 };
 
@@ -70,6 +77,7 @@ export const handleRoster: CommandHandler = async (interaction) => {
   if (sub === 'remove') return remove(interaction);
   if (sub === 'update-trainer') return updateTrainer(interaction);
   if (sub === 'cancel-request') return cancelRequest(interaction);
+  if (sub === 'repost-request') return repostRequest(interaction);
   return `Unknown subcommand: ${sub}`;
 };
 
@@ -167,4 +175,9 @@ const cancelRequest: CommandHandler = async (interaction) => {
   if (!found) return `${mention(targetId)} has no pending request.`;
   // Either of the gym's leader and manager can cancel, whoever made it.
   return cancel(requesterOf(interaction), found, ['leader', 'manager'], `${mention(targetId)}'s request`);
+};
+
+const repostRequest: CommandHandler = async (interaction) => {
+  if (!(await isStaff(interaction.guild_id, interaction.member))) return 'Only staff can repost a request.';
+  return repostCard(interaction.guild_id, String(subOptions(interaction).request_id).trim().toUpperCase());
 };
