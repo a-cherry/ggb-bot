@@ -11,7 +11,7 @@ import {
 import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
 import { findGym, gymName, loadLeague, mention, type Gym, type League, type Trainer } from './league.js';
 import {
-  closeApprovalCard, formatChange, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
+  closeApprovalCards, formatChange, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
 } from './requests.js';
 import { recoverRequest } from './recovery.js';
 
@@ -182,17 +182,11 @@ export async function afterApproval(guildId: string, applied: Applied): Promise<
   return problems;
 }
 
-// The cards of requests a disband made outdated. Returns the ones not closed.
+// The cards of requests a disband made outdated, found in one scan of the
+// staff channel. Returns the ones not closed.
 async function closeCards(requests: RosterRequest[]): Promise<string | undefined> {
-  const notClosed: string[] = [];
-  for (const req of requests) {
-    try {
-      if (!(await closeApprovalCard(req.request_id, outcomeLine(req)))) notClosed.push(`${req.request_id} (not found)`);
-    } catch (err) {
-      console.error(`${req.request_id}: staff card could not be marked outdated:`, err);
-      notClosed.push(req.request_id);
-    }
-  }
+  if (!requests.length) return undefined;
+  const notClosed = await closeApprovalCards(new Map(requests.map((r) => [r.request_id, outcomeLine(r)])));
   return notClosed.length ? `${notClosed.join(', ')}, now outdated` : undefined;
 }
 
@@ -255,12 +249,25 @@ export interface Applied {
 // returns the announcement and role changes (Spec: "Discord roles"). `req`
 // carries who decided and when, for requests a disband makes outdated.
 async function apply(guildId: string, league: League, req: RosterRequest, gym: Gym): Promise<Applied> {
+  // The members writeTrainers reads for their names; their roles let the role
+  // changes skip roles a member already has or doesn't hold, without reading them again.
+  const members = new Map<string, Member | undefined>();
+  const applied = await applyChange(guildId, league, req, gym, members);
+  return {
+    ...applied,
+    roles: applied.roles.map((c) => (members.has(c.userId) ? { ...c, member: members.get(c.userId) ?? null } : c)),
+  };
+}
+
+async function applyChange(
+  guildId: string, league: League, req: RosterRequest, gym: Gym, members: Map<string, Member | undefined>,
+): Promise<Applied> {
   const change = parseChange(req.change);
   const { roles } = getLeagueConfig();
   const announcement = await announcementFor(guildId, req, gym);
   switch (req.type as RequestType) {
     case 'add': {
-      await writeTrainers(guildId, league, req, [
+      await writeTrainers(guildId, league, req, members, [
         { discordId: req.target, set: { gym_id: gym.gym_id, role: change.role, leadership: 'none' } },
       ]);
       return {
@@ -273,7 +280,7 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
       };
     }
     case 'remove': {
-      await writeTrainers(guildId, league, req, [
+      await writeTrainers(guildId, league, req, members, [
         { discordId: req.target, set: { gym_id: '', role: 'trainer', leadership: 'none' } },
       ]);
       return {
@@ -312,7 +319,7 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
         set.leadership = 'none';
         target.remove.push(roles.gymManager);
       }
-      await writeTrainers(guildId, league, req, [{ discordId: req.target, set }, ...others]);
+      await writeTrainers(guildId, league, req, members, [{ discordId: req.target, set }, ...others]);
       return {
         announcement,
         roles: [target, ...otherRoles],
@@ -333,8 +340,8 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
       };
     }
     case 'disband': {
-      const members = league.trainers.map((t) => t.values).filter((t) => t.gym_id === gym.gym_id);
-      await writeTrainers(guildId, league, req, members.map((t) => ({
+      const onGym = league.trainers.map((t) => t.values).filter((t) => t.gym_id === gym.gym_id);
+      await writeTrainers(guildId, league, req, members, onGym.map((t) => ({
         discordId: t.discord_id,
         set: { gym_id: '', role: 'trainer', leadership: 'none' },
       })));
@@ -342,7 +349,7 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
       return {
         announcement,
         // The gym role itself is kept; members keep Participating Trainer, as on a remove.
-        roles: members.map((t) => ({
+        roles: onGym.map((t) => ({
           userId: t.discord_id,
           add: [],
           remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer],
@@ -404,8 +411,10 @@ interface TrainerChange {
 
 // One Roster history row per changed trainer, then their Trainers rows. A member
 // with no Trainers row gets one. Names are refreshed from Discord in the same
-// write (Spec: "Refresh on touch").
-async function writeTrainers(guildId: string, league: League, req: RosterRequest, changes: TrainerChange[]): Promise<void> {
+// write (Spec: "Refresh on touch"); the members read are kept in `members`.
+async function writeTrainers(
+  guildId: string, league: League, req: RosterRequest, members: Map<string, Member | undefined>, changes: TrainerChange[],
+): Promise<void> {
   const history: Row<'rosterHistory'>[] = [];
   const updates: SheetRow<'trainers'>[] = [];
   const appends: Trainer[] = [];
@@ -413,6 +422,7 @@ async function writeTrainers(guildId: string, league: League, req: RosterRequest
     const existing = league.trainers.find((t) => t.values.discord_id === c.discordId);
     const before = existing?.values;
     const member = await getMember(guildId, c.discordId);
+    members.set(c.discordId, member);
     const after: Trainer = {
       discord_id: c.discordId,
       server_nickname: member ? displayName(member) : before?.server_nickname ?? '',

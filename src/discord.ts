@@ -170,8 +170,9 @@ export interface ActionRow {
 }
 
 // Mentions render as names but never ping anyone.
-export const postMessage = (channelId: string, content: string, components?: ActionRow[]) =>
-  call('POST', `/channels/${channelId}/messages`, { content, components, allowed_mentions: { parse: [] } });
+// Mentions never ping, except the roles in `pingRoleIds`.
+export const postMessage = (channelId: string, content: string, components?: ActionRow[], pingRoleIds: string[] = []) =>
+  call('POST', `/channels/${channelId}/messages`, { content, components, allowed_mentions: { parse: [], roles: pingRoleIds } });
 
 export interface Message {
   id: string;

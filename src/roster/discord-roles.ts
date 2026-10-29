@@ -1,13 +1,17 @@
 // Mirrors approved roster changes onto Discord roles. The League DB stays the
 // source of truth: a failure here doesn't undo the approval, it's reported on
 // the card for staff to fix by hand.
-import { addMemberRole, cachedRoles, DiscordError, removeMemberRole, renameRole, type Role } from '../discord.js';
+import {
+  addMemberRole, cachedRoles, DiscordError, getMember, removeMemberRole, renameRole, type Member, type Role,
+} from '../discord.js';
 import { crashPoint } from './approval.js';
 
 export interface RoleChange {
   userId: string;
   add: string[]; // role names
   remove: string[];
+  // The member as just read, null when they've left the server; read here when left out.
+  member?: Member | null;
 }
 
 export interface RoleRename {
@@ -20,8 +24,9 @@ const cantChange = (name: string) =>
   `the bot can't change ${name}. It needs Manage Roles, and its role must be above ${name} in the server's role list`;
 
 // Applies each change one role at a time, so roles staff gave by hand are left
-// alone. A failed role doesn't stop the rest, so staff get the full list to fix.
-// Returns what failed and why, or undefined when every change landed.
+// alone, skipping roles a member already has or doesn't hold. A failed role
+// doesn't stop the rest, so staff get the full list to fix. Returns what failed
+// and why, or undefined when every change landed.
 export async function applyRoleChanges(guildId: string, changes: RoleChange[]): Promise<string | undefined> {
   const names = [...new Set(changes.flatMap((c) => [...c.add, ...c.remove]))];
   let roles = await cachedRoles(guildId);
@@ -32,9 +37,22 @@ export async function applyRoleChanges(guildId: string, changes: RoleChange[]): 
   const failed: string[] = []; // "<@member> (role)"
   let forbidden: string | undefined; // a role the bot isn't allowed to change
   member: for (const c of changes) {
-    for (const [names, op] of [[c.add, addMemberRole], [c.remove, removeMemberRole]] as const) {
+    let member: Member | null | undefined;
+    try {
+      member = c.member !== undefined ? c.member : await getMember(guildId, c.userId);
+    } catch (err) {
+      console.error(`reading ${c.userId}'s roles failed:`, err);
+      failed.push(`<@${c.userId}> (couldn't read their roles)`);
+      continue;
+    }
+    if (!member) continue; // they left the server, so they hold no roles to change
+    const held = new Set(member.roles);
+    for (const [names, op, adding] of [[c.add, addMemberRole, true], [c.remove, removeMemberRole, false]] as const) {
       for (const name of names) {
         if (missing.includes(name)) continue;
+        // Only the calls that change something: a disband removes four roles
+        // from every member, and most hold one or two of them.
+        if (held.has(byName(name).id) === adding) continue;
         try {
           crashPoint('role');
           await op(guildId, c.userId, byName(name).id);

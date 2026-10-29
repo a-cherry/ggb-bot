@@ -1,5 +1,6 @@
 // Typed rows of League DB tabs. Cells come back as strings keyed by the
-// column names in src/schema.ts; checkTabs() is what guarantees the headers match.
+// column names in src/schema.ts. Reads and writes go by column position, so
+// every read checks the tab's header row first.
 import { getSheets } from './google.js';
 import { getLeagueDbId } from './league-db.js';
 import { TABS, tabRange, type TabKey } from './schema.js';
@@ -25,21 +26,42 @@ function toRow<K extends TabKey>(key: K, cells: unknown[]): Row<K> {
   return row as Row<K>;
 }
 
+// A tab's header row isn't the schema's: a column was inserted, moved or
+// renamed in the sheet. The message is for staff; `userMessage` is for whoever
+// ran the command.
+export class SheetLayoutError extends Error {
+  readonly userMessage = "The bot can't read the League DB right now, so nothing was changed. Staff have been told.";
+  constructor(readonly tab: string, expected: readonly string[], found: string[]) {
+    super(
+      `The League DB's ${tab} tab doesn't have the columns the bot expects, so the bot can't safely read or write it. ` +
+        `Put row 1 back to ${expected.join(', ')} (found ${found.join(', ') || 'nothing'}).`,
+    );
+  }
+}
+
 // Reads several tabs in one request. Blank rows are skipped but keep their numbering.
+// Throws SheetLayoutError if a tab's header row doesn't match the schema;
+// columns staff add after the schema's are ignored.
 export async function readTabs<const Keys extends readonly TabKey[]>(...keys: Keys): Promise<RowsOf<Keys>> {
   const res = await getSheets().spreadsheets.values.batchGet({
     spreadsheetId: getLeagueDbId(),
-    ranges: keys.map((k) => `${tabRange(TABS[k].name)}!A2:${lastColumn(k)}`),
+    ranges: keys.map((k) => `${tabRange(TABS[k].name)}!A1:${lastColumn(k)}`),
     // Unformatted, so a number or date reads the same whatever the sheet's display
     // format. Dates come back as serial numbers; see sheetDate() in seasons.ts.
     valueRenderOption: 'UNFORMATTED_VALUE',
     dateTimeRenderOption: 'SERIAL_NUMBER',
   });
-  return keys.map((key, t) =>
-    (res.data.valueRanges![t].values ?? [])
+  return keys.map((key, t) => {
+    const [header = [], ...rows] = res.data.valueRanges![t].values ?? [];
+    const found = header.map((v) => String(v).trim());
+    const { name, columns } = TABS[key];
+    if (found.length !== columns.length || columns.some((c, i) => found[i] !== c)) {
+      throw new SheetLayoutError(name, columns, found);
+    }
+    return rows
       .map((cells, i) => ({ rowNumber: i + 2, values: toRow(key, cells) }))
-      .filter((r) => Object.values(r.values).some((v) => v !== '')),
-  ) as RowsOf<Keys>;
+      .filter((r) => Object.values(r.values).some((v) => v !== ''));
+  }) as RowsOf<Keys>;
 }
 
 const toCells = <K extends TabKey>(key: K, row: Row<K>) =>

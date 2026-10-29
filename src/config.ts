@@ -10,6 +10,7 @@ export interface LeagueConfig {
   };
   // Members with any of these Discord roles may approve or reject roster requests.
   staffRoles: string[];
+  alertRole: string; // pinged on problems staff must fix at once, e.g. a League DB tab the bot can't read
   relegatedGyms: string[];
 }
 

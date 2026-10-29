@@ -7,9 +7,11 @@ import {
 } from 'discord-interactions';
 import { handleDisbandButton } from './commands/gym.js';
 import { deferredCommands } from './commands/index.js';
-import { drain, runDeferred, runDeferredUpdate } from './interactions.js';
+import { alertStaff, drain, runDeferred, runDeferredUpdate } from './interactions.js';
 import { handleDecision } from './roster/approval.js';
 import { recoverApprovals } from './roster/recovery.js';
+import { TABS, type TabKey } from './schema.js';
+import { readTabs, SheetLayoutError } from './sheet-rows.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const publicKey = process.env.DISCORD_PUBLIC_KEY;
@@ -78,9 +80,19 @@ app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyK
   res.status(400).send({ error: 'unknown interaction' });
 });
 
-// Before serving, finish any approval that stopped partway (Spec: "If the bot stops mid-approval").
 const guildId = process.env.DISCORD_GUILD_ID;
 if (!guildId) throw new Error('DISCORD_GUILD_ID is not set');
+
+// Refuse to start on a League DB whose header rows don't match src/schema.ts:
+// reads and writes go by column position. Staff are told why in their channel.
+try {
+  await readTabs(...(Object.keys(TABS) as TabKey[]));
+} catch (err) {
+  if (err instanceof SheetLayoutError) await alertStaff(guildId, err, "The bot won't start until it's fixed.");
+  throw err;
+}
+
+// Before serving, finish any approval that stopped partway (Spec: "If the bot stops mid-approval").
 try {
   await recoverApprovals(guildId);
 } catch (err) {

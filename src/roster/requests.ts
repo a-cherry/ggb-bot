@@ -132,6 +132,14 @@ export const postApprovalCard = (text: string, requestId: string) =>
 
 export const postStaffNotice = (text: string) => postMessage(staffChannelId(), text);
 
+// A staff notice that pings the alert role (config/league.json), or posts
+// without a ping if the server has no role by that name.
+export async function postStaffAlert(guildId: string, text: string): Promise<void> {
+  const name = getLeagueConfig().alertRole;
+  const role = (await cachedRoles(guildId)).find((r) => r.name === name);
+  await postMessage(staffChannelId(), role ? `<@&${role.id}> ${text}` : text, undefined, role ? [role.id] : []);
+}
+
 // How many recent staff channel messages to search for a request's card.
 const CARD_SEARCH_PAGES = 5;
 
@@ -139,19 +147,33 @@ const CARD_SEARCH_PAGES = 5;
 // The card's message ID isn't stored, so it's found among the staff channel's
 // recent messages by its button. Returns false when it isn't found.
 export async function closeApprovalCard(requestId: string, outcome: string): Promise<boolean> {
+  return !(await closeApprovalCards(new Map([[requestId, outcome]]))).length;
+}
+
+// Closes several cards, request ID to outcome line, in one scan of the staff
+// channel. Returns the IDs whose card wasn't found or couldn't be edited.
+export async function closeApprovalCards(outcomes: Map<string, string>): Promise<string[]> {
   const channelId = staffChannelId();
+  const left = new Map(outcomes);
+  const failed: string[] = [];
   let before: string | undefined;
-  for (let page = 0; page < CARD_SEARCH_PAGES; page++) {
+  for (let page = 0; page < CARD_SEARCH_PAGES && left.size; page++) {
     const messages = await listMessages(channelId, before);
-    const card = messages.find((m) =>
-      m.components?.some((row) => row.components.some((b) => b.custom_id === `approve:${requestId}`)),
-    );
-    if (card) {
-      await editMessage(channelId, card.id, `${card.content}\n${outcome}`, []);
-      return true;
+    for (const m of messages) {
+      const button = m.components?.flatMap((row) => row.components).find((b) => b.custom_id?.startsWith('approve:'));
+      const requestId = button?.custom_id?.slice('approve:'.length);
+      const outcome = requestId && left.get(requestId);
+      if (!requestId || !outcome) continue;
+      left.delete(requestId);
+      try {
+        await editMessage(channelId, m.id, `${m.content}\n${outcome}`, []);
+      } catch (err) {
+        console.error(`${requestId}: staff card could not be closed:`, err);
+        failed.push(requestId);
+      }
     }
-    if (messages.length < 100) return false;
+    if (messages.length < 100) break;
     before = messages[messages.length - 1].id;
   }
-  return false;
+  return [...failed, ...[...left.keys()].map((id) => `${id} (not found)`)];
 }

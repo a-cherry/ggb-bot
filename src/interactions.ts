@@ -6,6 +6,8 @@ import { InteractionResponseFlags, InteractionResponseType } from 'discord-inter
 import type { Response } from 'express';
 import { editOriginalResponse, postFollowup, type ActionRow, type Member } from './discord.js';
 import { LockTimeout } from './locks.js';
+import { postStaffAlert } from './roster/requests.js';
+import { SheetLayoutError } from './sheet-rows.js';
 
 // Interactions still being worked on, so a shutdown can wait for them.
 const inFlight = new Set<Promise<void>>();
@@ -17,9 +19,33 @@ const track = (work: Promise<void>) => {
 // Resolves once every interaction in progress has finished.
 export const drain = () => Promise.allSettled([...inFlight]);
 
-// The reply for a handler that threw: a lock timeout says to retry, anything else is generic.
-const failureReply = (err: unknown) =>
-  err instanceof LockTimeout ? err.message : 'Something went wrong on the bot side. Please tell staff.';
+// The reply for a handler that threw. A sheet layout problem is also posted to
+// staff, since only they can fix it; a lock timeout says to retry; anything
+// else is generic.
+function failureReply(guildId: string, err: unknown): string {
+  if (err instanceof SheetLayoutError) {
+    void alertStaff(guildId, err);
+    return err.userMessage;
+  }
+  if (err instanceof LockTimeout) return err.message;
+  return 'Something went wrong on the bot side. Please tell staff.';
+}
+
+// Staff hear about each broken tab at most this often, however many commands hit it.
+const ALERT_EVERY_MS = 10 * 60_000;
+const lastAlert = new Map<string, number>();
+
+export async function alertStaff(
+  guildId: string, err: SheetLayoutError, consequence = "Commands that use this tab fail until it's fixed.",
+): Promise<void> {
+  if (Date.now() - (lastAlert.get(err.tab) ?? 0) < ALERT_EVERY_MS) return;
+  lastAlert.set(err.tab, Date.now());
+  try {
+    await postStaffAlert(guildId, `**League DB problem**: ${err.message} ${consequence}`);
+  } catch (postErr) {
+    console.error('staff alert about the League DB failed to post:', postErr);
+  }
+}
 
 // The fields of an application command interaction the bot uses.
 export interface CommandInteraction {
@@ -68,7 +94,7 @@ export function runDeferred(res: Response, interaction: CommandInteraction, hand
       result = typeof r === 'string' ? { reply: r } : r;
     } catch (err) {
       console.error(`/${interaction.data.name} failed:`, err);
-      result = { reply: failureReply(err) };
+      result = { reply: failureReply(interaction.guild_id, err) };
     }
     // The private reply goes first: a follow-up sent while the reply is still
     // "thinking" would replace it and be private too.
@@ -115,7 +141,7 @@ export function runDeferredUpdate(res: Response, interaction: ComponentInteracti
       result = await handler(interaction);
     } catch (err) {
       console.error(`button ${interaction.data.custom_id} failed:`, err);
-      result = { reply: failureReply(err) };
+      result = { reply: failureReply(interaction.guild_id, err) };
     }
     try {
       if (result.message !== undefined) {
