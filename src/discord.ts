@@ -29,11 +29,18 @@ export class DiscordError extends Error {
   }
 }
 
+// A call that gets no answer in this time fails, so one hung call can't hold a
+// lock forever.
+const CALL_TIMEOUT_MS = 15_000;
+// Rate-limit waits before a call gives up, and the longest wait it accepts.
+const MAX_RATE_LIMIT_WAITS = 5;
+const MAX_RATE_LIMIT_WAIT_S = 60;
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
 
-  for (;;) {
+  for (let waits = 0; ; waits++) {
     const res = await fetch(`${API}${path}`, {
       method,
       headers: {
@@ -41,13 +48,16 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
 
-    // Rate limited: wait as long as Discord says, then retry.
-    if (res.status === 429) {
-      const { retry_after } = (await res.json()) as { retry_after: number };
-      await new Promise((r) => setTimeout(r, Math.ceil(retry_after * 1000)));
-      continue;
+    // Rate limited: wait as long as Discord says, then retry, within limits.
+    if (res.status === 429 && waits < MAX_RATE_LIMIT_WAITS) {
+      const { retry_after } = (await res.clone().json()) as { retry_after: number };
+      if (retry_after <= MAX_RATE_LIMIT_WAIT_S) {
+        await new Promise((r) => setTimeout(r, Math.ceil(retry_after * 1000)));
+        continue;
+      }
     }
     if (!res.ok) throw new DiscordError(`Discord ${method} ${path}: ${res.status} ${await res.text()}`, res.status);
     // 204 No Content: role changes return no body.

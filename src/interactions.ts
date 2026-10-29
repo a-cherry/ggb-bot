@@ -5,6 +5,21 @@
 import { InteractionResponseFlags, InteractionResponseType } from 'discord-interactions';
 import type { Response } from 'express';
 import { editOriginalResponse, postFollowup, type ActionRow, type Member } from './discord.js';
+import { LockTimeout } from './locks.js';
+
+// Interactions still being worked on, so a shutdown can wait for them.
+const inFlight = new Set<Promise<void>>();
+const track = (work: Promise<void>) => {
+  inFlight.add(work);
+  void work.finally(() => inFlight.delete(work));
+};
+
+// Resolves once every interaction in progress has finished.
+export const drain = () => Promise.allSettled([...inFlight]);
+
+// The reply for a handler that threw: a lock timeout says to retry, anything else is generic.
+const failureReply = (err: unknown) =>
+  err instanceof LockTimeout ? err.message : 'Something went wrong on the bot side. Please tell staff.';
 
 // The fields of an application command interaction the bot uses.
 export interface CommandInteraction {
@@ -46,14 +61,14 @@ export function runDeferred(res: Response, interaction: CommandInteraction, hand
     data: { flags: InteractionResponseFlags.EPHEMERAL },
   });
 
-  void (async () => {
+  track((async () => {
     let result: CommandResult;
     try {
       const r = await handler(interaction);
       result = typeof r === 'string' ? { reply: r } : r;
     } catch (err) {
       console.error(`/${interaction.data.name} failed:`, err);
-      result = { reply: 'Something went wrong on the bot side. Please tell staff.' };
+      result = { reply: failureReply(err) };
     }
     // The private reply goes first: a follow-up sent while the reply is still
     // "thinking" would replace it and be private too.
@@ -65,7 +80,7 @@ export function runDeferred(res: Response, interaction: CommandInteraction, hand
     } catch (err) {
       console.error(`/${interaction.data.name}: could not send the reply:`, err);
     }
-  })();
+  })());
 }
 
 // The fields of a button press the bot uses.
@@ -94,13 +109,13 @@ export function runDeferredUpdate(res: Response, interaction: ComponentInteracti
   // Acknowledges without changing the message yet; nothing shows as "thinking".
   res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
 
-  void (async () => {
+  track((async () => {
     let result: ComponentResult;
     try {
       result = await handler(interaction);
     } catch (err) {
       console.error(`button ${interaction.data.custom_id} failed:`, err);
-      result = { reply: 'Something went wrong on the bot side. Please tell staff.' };
+      result = { reply: failureReply(err) };
     }
     try {
       if (result.message !== undefined) {
@@ -111,5 +126,5 @@ export function runDeferredUpdate(res: Response, interaction: ComponentInteracti
     } catch (err) {
       console.error(`button ${interaction.data.custom_id}: could not send the result:`, err);
     }
-  })();
+  })());
 }

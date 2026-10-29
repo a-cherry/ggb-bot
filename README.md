@@ -9,6 +9,7 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 - **Discord HTTP interactions**, not a gateway bot. Discord POSTs each slash command or button press to `/interactions`; the bot answers within 3 seconds or defers and follows up. The bot always shows as offline in Discord; that's expected.
 - **Google Sheets is the database.** The bot reads and writes the League DB workbook through a Google service account. A workbook is reachable once it's shared with the service account's email.
 - **One always-on Node process.** Approval locks, the `/submit` and `/rebuild` lock, and the daily nickname sync schedule live in memory, so exactly one instance may run.
+- **Deploys.** On SIGTERM the bot stops taking interactions and waits up to 50 seconds for the ones in progress, so an approval isn't cut off halfway. Railway kills the old process as soon as it sends SIGTERM unless told to wait, so set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60` on the service. Leave `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` unset. Railway routes new interactions to the new process while the old one drains, so startup recovery leaves an approval claimed in the last 90 seconds alone until the old process has had time to finish it.
 
 ## Layout
 

@@ -16,32 +16,49 @@ import { closeApprovalCard, parseChange, type RosterRequest } from './requests.j
 
 type History = Row<'rosterHistory'>;
 
+// An approval claimed this recently may still be running in the process that
+// is stopping for a deploy, which drains for up to 50 seconds (see server.ts).
+// Startup leaves it until it's this old.
+const SETTLE_MS = 90_000;
+
 export async function recoverApprovals(guildId: string): Promise<void> {
   const league = await loadLeague();
   const started = league.requests.filter((r) => r.values.status === 'pending' && r.values.decided_by);
   for (const { values } of started) {
-    try {
-      await withLock(`gym:${values.gym_id}`, async () => {
-        const outcome = await recoverRequest(guildId, values.request_id);
-        if (outcome && !(await closeApprovalCard(values.request_id, outcome))) {
-          console.error(`${values.request_id}: staff card not found to mark approved`);
-        }
-      });
-    } catch (err) {
-      console.error(`${values.request_id}: crash recovery failed:`, err);
+    const wait = SETTLE_MS - (Date.now() - Date.parse(values.decided_at));
+    if (wait > 0) {
+      console.log(`${values.request_id}: approval claimed ${Math.round((SETTLE_MS - wait) / 1000)}s ago; recovering it in ${Math.ceil(wait / 1000)}s`);
+      setTimeout(() => void recoverOne(guildId, values.request_id, values.gym_id), wait);
+      continue;
     }
+    await recoverOne(guildId, values.request_id, values.gym_id);
+  }
+}
+
+async function recoverOne(guildId: string, requestId: string, gymId: string): Promise<void> {
+  try {
+    await withLock(`gym:${gymId}`, async () => {
+      const outcome = await recoverRequest(guildId, requestId);
+      if (outcome && !(await closeApprovalCard(requestId, outcome))) {
+        console.error(`${requestId}: staff card not found to mark approved`);
+      }
+    });
+  } catch (err) {
+    console.error(`${requestId}: crash recovery failed:`, err);
   }
 }
 
 // Finishes or resets one stopped approval; the caller holds the gym's lock.
 // Returns the card's outcome lines when it finished the approval, or nothing
-// when the request is plain pending again.
+// when the request is plain pending again or no longer needs recovering.
 export async function recoverRequest(guildId: string, requestId: string): Promise<string | undefined> {
   crashPoint('recovery');
   // Read again for each request: finishing one can change what the next sees.
   const league = await loadLeague();
   const row = league.requests.find((r) => r.values.request_id === requestId)!;
   const req = row.values;
+  // Already finished, e.g. by a staff button press while recovery waited.
+  if (req.status !== 'pending' || !req.decided_by) return undefined;
   const gym = findGym(league, req.gym_id)!;
   const history = league.history.map((h) => h.values).filter((h) => h.request_id === requestId);
 

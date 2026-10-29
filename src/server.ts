@@ -7,7 +7,7 @@ import {
 } from 'discord-interactions';
 import { handleDisbandButton } from './commands/gym.js';
 import { deferredCommands } from './commands/index.js';
-import { runDeferred, runDeferredUpdate } from './interactions.js';
+import { drain, runDeferred, runDeferredUpdate } from './interactions.js';
 import { handleDecision } from './roster/approval.js';
 import { recoverApprovals } from './roster/recovery.js';
 
@@ -21,8 +21,20 @@ app.get('/health', (_req, res) => {
   res.send('ok');
 });
 
-app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
+// Discord's interaction payloads are a few KB. Reading the body is capped, so
+// an oversized request is refused before its signature is checked; the
+// signature check then reads the raw body this leaves.
+const MAX_BODY = '256kb';
+let shuttingDown = false;
+
+app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyKeyMiddleware(publicKey), (req, res) => {
   const interaction = req.body;
+
+  // Stopping for a deploy: the new process handles anything that arrives now.
+  if (shuttingDown) {
+    res.status(503).send({ error: 'shutting down' });
+    return;
+  }
 
   if (interaction.type === InteractionType.PING) {
     res.send({ type: InteractionResponseType.PONG });
@@ -66,7 +78,7 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
   res.status(400).send({ error: 'unknown interaction' });
 });
 
-// Before serving, finish any approval the bot stopped in the middle of (Spec: "Approve", step 6).
+// Before serving, finish any approval that stopped partway (Spec: "If the bot stops mid-approval").
 const guildId = process.env.DISCORD_GUILD_ID;
 if (!guildId) throw new Error('DISCORD_GUILD_ID is not set');
 try {
@@ -75,4 +87,25 @@ try {
   console.error('crash recovery failed:', err);
 }
 
-app.listen(PORT, () => console.log(`listening on ${PORT}`));
+const server = app.listen(PORT, () => console.log(`listening on ${PORT}`));
+
+// The longest a shutdown waits for interactions in progress. Railway's
+// RAILWAY_DEPLOYMENT_DRAINING_SECONDS must be longer (see the README).
+const DRAIN_MS = 50_000;
+
+// On a deploy or Ctrl+C: stop taking interactions, let the ones in progress
+// finish, so an approval isn't cut off after it's marked approved, then exit.
+const shutdown = async (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal}: finishing interactions in progress, then stopping`);
+  server.close();
+  const timedOut = await Promise.race([
+    drain().then(() => false),
+    new Promise<true>((r) => setTimeout(() => r(true), DRAIN_MS).unref()),
+  ]);
+  if (timedOut) console.error(`stopping with interactions still in progress after ${DRAIN_MS / 1000}s`);
+  process.exit(0);
+};
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
