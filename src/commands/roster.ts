@@ -5,7 +5,6 @@ import { checkAdd, checkRemove, checkUpdate, removeWarnings } from '../roster/ch
 import { findTrainer, mention, type League, type Trainer } from '../roster/league.js';
 import { roleLabel } from '../roster/requests.js';
 import { cancel, submit, type Requester } from '../roster/submit.js';
-import { activeSeason, formatDate, isInSeason, todayUtc } from '../seasons.js';
 import { readTabs } from '../sheet-rows.js';
 
 const trainerOption = (description: string) => ({ type: 6, name: 'trainer', description, required: true });
@@ -62,8 +61,6 @@ export const rosterCommand = {
       description: "Withdraw a pending request for a trainer on your gym",
       options: [trainerOption('The trainer the request is for')],
     },
-    // Temporary, for testing the plumbing; removed once /roster add works.
-    { type: 1, name: 'whoami', description: 'Show what the bot reads about you from the League DB' },
   ],
 };
 
@@ -73,7 +70,6 @@ export const handleRoster: CommandHandler = async (interaction) => {
   if (sub === 'remove') return remove(interaction);
   if (sub === 'update-trainer') return updateTrainer(interaction);
   if (sub === 'cancel-request') return cancelRequest(interaction);
-  if (sub === 'whoami') return whoami(interaction);
   return `Unknown subcommand: ${sub}`;
 };
 
@@ -171,30 +167,4 @@ const cancelRequest: CommandHandler = async (interaction) => {
   if (!found) return `${mention(targetId)} has no pending request.`;
   // Either of the gym's leader and manager can cancel, whoever made it.
   return cancel(requesterOf(interaction), found, ['leader', 'manager'], `${mention(targetId)}'s request`);
-};
-
-const whoami: CommandHandler = async ({ member }) => {
-  const [trainers, gyms, seasons] = await readTabs('trainers', 'gyms', 'seasons');
-  const season = activeSeason(seasons);
-  const today = todayUtc();
-  const lines = [`Discord: ${displayName(member)} (${member.user.username}, ${member.user.id})`];
-
-  const trainer = trainers.find((t) => t.values.discord_id === member.user.id);
-  if (!trainer) {
-    lines.push('Trainers: no row for you');
-  } else {
-    const t = trainer.values;
-    const gym = gyms.find((g) => g.values.gym_id === t.gym_id);
-    lines.push(
-      `Gym: ${t.gym_id ? `${gym ? `${gym.values.name}` : '(no such gym)'}` : 'none'}`,
-      `Role ${t.role}, leadership ${t.leadership}`,
-    );
-  }
-
-  lines.push(
-    season
-      ? `Season ${season.season}: ${formatDate(season.start)} to ${formatDate(season.end)}; ${isInSeason(season, today) ? 'in season' : 'off-season'} on ${formatDate(today)} (UTC)`
-      : `No active season: off-season on ${formatDate(today)} (UTC)`,
-  );
-  return lines.join('\n');
 };

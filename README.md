@@ -174,9 +174,7 @@ Run the dry run again. Phoenix should show 1 Leader and 1 Participating trainer,
 Roster and gym commands work only in `#transfer-request` and `#bot-staff`. Discord enforces this, not the bot, so it's set by hand in each server (dev and production) after `npm run register`:
 
 1. Server Settings > Integrations > the bot.
-2. Open `/roster` > Add Channels, add "All Channels", `#transfer-request` and `#bot-staff`, set All Channels to ✗ and the other two to ✓, and save. Leave Role & Member Overrides empty. Do the same for `/gym` once it exists.
+2. Open `/roster` > Add Channels, add "All Channels", `#transfer-request` and `#bot-staff`, set All Channels to ✗ and the other two to ✓, and save. Leave Role & Member Overrides empty. Do the same for `/gym`.
 3. Check from an account without Administrator. The server owner (and likely anyone with Administrator) still sees the command in every channel; that's expected.
 
 Approving a request also changes Discord roles, so the bot needs Manage Roles, with its role above every gym role and gym fan role (a rebrand renames both), Participating Trainer, Non-Player, Gym Leader and Gym Manager and below the staff roles (Spec: "Discord roles").
-
-`/roster whoami` (temporary) shows what the bot reads about you: your Trainers row, your gym and whether today is in season.
