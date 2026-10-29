@@ -1,4 +1,4 @@
-// Roster requests rows and their staff approval cards (Spec: "Roster requests", "Approval").
+// Roster requests rows and their staff approval cards (Roster Spec: "Making a request", "Approval").
 import { getLeagueConfig } from '../config.js';
 import { cachedRoles, editMessage, escapeMarkdown, listMessages, postMessage, type ActionRow } from '../discord.js';
 import type { Row } from '../sheet-rows.js';

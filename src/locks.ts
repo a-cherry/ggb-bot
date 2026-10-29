@@ -1,5 +1,5 @@
 // In-memory locks: callers with the same key run one at a time, in arrival order.
-// Correct only because exactly one bot process runs (Spec: "Platform").
+// Correct only because exactly one bot process runs (Bot Spec: "Scope and conventions").
 const tails = new Map<string, Promise<void>>();
 
 // How long a caller waits for the lock before giving up. Calls inside a lock

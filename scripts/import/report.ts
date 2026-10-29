@@ -2,7 +2,7 @@
 // same report prints to the terminal and posts to Discord.
 import type { Classification, ImportedTrainer } from './classify.js';
 
-// Roster limits the report flags (Spec: "Report also lists").
+// Roster limits the report flags (Bot Spec: "Initial population").
 const TRAINERS_MIN = 8;
 const TRAINERS_MAX = 15;
 const LEADERS_REQUIRED = 1;

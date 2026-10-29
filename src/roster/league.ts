@@ -56,7 +56,7 @@ export interface SeasonMoves {
 
 // From Roster history: their gym at the start date, plus every gym joined or left
 // since. Import rows count as their gym at the start whatever their timestamp,
-// so the import never counts as the season's one switch (Spec: "Initial population").
+// so the import never counts as the season's one switch (Bot Spec: "Initial population").
 export function seasonMoves(league: League, discordId: string, start: string): SeasonMoves {
   const rows = league.history
     .map((r) => r.values)

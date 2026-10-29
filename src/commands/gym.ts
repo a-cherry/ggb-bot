@@ -1,4 +1,4 @@
-// /gym: rebrand and disband requests from a gym's leader (Spec: "Roster requests").
+// /gym: rebrand and disband requests from a gym's leader (Roster Spec: "Commands").
 import { cachedRoles, escapeMarkdown, parseEmote, renderEmote, type ActionRow } from '../discord.js';
 import type { CommandHandler, CommandInteraction, ComponentHandler, ComponentResult } from '../interactions.js';
 import { checkDisband, checkRebrand, checkRequester } from '../roster/checks.js';
@@ -78,7 +78,7 @@ const rebrand: CommandHandler = async (interaction) => {
   });
 };
 
-// Disband asks twice before making the request (Spec: "a confirm button follows").
+// Disband asks twice before making the request (Roster Spec: "Commands").
 // Nothing is written until the second confirm. Both prompts are private, so
 // only the leader who ran the command can press their buttons.
 const disband: CommandHandler = async (interaction) => {

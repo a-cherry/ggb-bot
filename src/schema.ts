@@ -1,5 +1,5 @@
 // League DB tabs and columns, in sheet order. Source of truth: the
-// "Data model the bot relies on" section of the GGB Bot Behavior Spec.
+// "Data model" section of the GGB Bot Spec.
 export const TABS = {
   gyms: {
     name: 'Gyms',

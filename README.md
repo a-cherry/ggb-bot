@@ -2,7 +2,7 @@
 
 Discord bot for Global Gym Battles (GGB), a team-wars league for Pokémon TCG Pocket. It keeps the league's gyms and trainers in Google Sheets, runs roster requests through staff approval, ingests weekly match sheets, and keeps trainer nicknames in sync with Discord.
 
-Bot behavior and the column-level data model are defined in the **GGB Bot Behavior Spec**. Read it before changing behavior; this README only covers running the code.
+Bot behavior and the column-level data model are defined in the **GGB Bot Spec**, with `/roster` and `/gym` in detail in the **GGB Roster Spec**. Read them before changing behavior; this README only covers running the code.
 
 ## How it works
 
@@ -24,7 +24,7 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 | `src/locks.ts` | In-memory locks (request IDs, one approval per gym at a time) |
 | `src/views.ts` | League Stats views rebuild (empty until the views are built) |
 | `src/google.ts` | Sheets client for the service account, with timeouts and retries |
-| `src/schema.ts` | Every League DB tab and its columns, from the Spec |
+| `src/schema.ts` | Every League DB tab and its columns, from the Bot Spec's Data model |
 | `src/league-db.ts` | Checks the League DB tabs against the schema |
 | `src/discord.ts` | Discord REST calls: roles, members, messages, deferred replies |
 | `src/config.ts` | Loads `config/league.json`: import and staff role names, S4 relegated gyms |
@@ -98,7 +98,7 @@ The tunnel URL changes every time cloudflared restarts, so step 3 repeats each s
     npm run sheets-smoke
     ```
 
-`db:setup` adds any missing tabs with the Spec's headers, freezes and bolds each header row, puts tabs in Spec order, and removes the empty default `Sheet1`. It's safe to re-run: tabs that already match print `ok`. If an existing tab's header doesn't match the schema, it lists expected vs found and writes nothing.
+`db:setup` adds any missing tabs with the Bot Spec's headers, freezes and bolds each header row, puts tabs in that order, and removes the empty default `Sheet1`. It's safe to re-run: tabs that already match print `ok`. If an existing tab's header doesn't match the schema, it lists expected vs found and writes nothing.
 
 ### After a schema change
 
@@ -115,7 +115,7 @@ When a column is added to or changed in `src/schema.ts`, `db:setup` refuses on t
 
 ## Testing the import
 
-The import reads the Discord member list once and writes the Gyms and Trainers tabs (Spec: "Initial population"). Test it against the dev test server and dev workbook, never the real ones.
+The import reads the Discord member list once and writes the Gyms and Trainers tabs (Bot Spec: "Initial population"). Test it against the dev test server and dev workbook, never the real ones.
 
 ### 1. Test server
 
@@ -179,4 +179,4 @@ Roster and gym commands work only in `#transfer-request` and `#bot-staff`. Disco
 2. Open `/roster` > Add Channels, add "All Channels", `#transfer-request` and `#bot-staff`, set All Channels to ✗ and the other two to ✓, and save. Leave Role & Member Overrides empty. Do the same for `/gym`.
 3. Check from an account without Administrator. The server owner (and likely anyone with Administrator) still sees the command in every channel; that's expected.
 
-Approving a request also changes Discord roles, so the bot needs Manage Roles, with its role above every gym role and gym fan role (a rebrand renames both), Participating Trainer, Non-Player, Gym Leader and Gym Manager and below the staff roles (Spec: "Discord roles").
+Approving a request also changes Discord roles, so the bot needs Manage Roles, with its role above every gym role and gym fan role (a rebrand renames both), Participating Trainer, Non-Player, Gym Leader and Gym Manager and below the staff roles (Roster Spec: "What each change does").

@@ -1,4 +1,4 @@
-// One-shot import of gyms and trainers from Discord (Spec: "Initial population").
+// One-shot import of gyms and trainers from Discord (Bot Spec: "Initial population").
 //   npm run import -- --season 5 --dry-run           reads Discord, writes nothing, posts the report
 //   npm run import -- --season 5 --commit            writes Gyms, Trainers and Roster history
 //   npm run import -- --season 5 --commit --force    resets those tabs and imports again

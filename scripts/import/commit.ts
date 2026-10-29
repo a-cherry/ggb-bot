@@ -35,7 +35,7 @@ export async function writeImport(
     t.discordId, t.name, t.username, '', ids.get(t.gym)!, t.role, t.leadership, 'active',
   ]);
 
-  // Before: no gym. After: their gym, role and leadership (Spec: "Initial population").
+  // Before: no gym. After: their gym, role and leadership (Bot Spec: "Initial population").
   const history = c.trainers.map((t) => [
     season, now, t.discordId, '', '', '', ids.get(t.gym)!, t.role, t.leadership, 'import', '',
   ]);

@@ -1,5 +1,5 @@
-// Recovery of approvals that stopped partway (Spec: "If the bot stops
-// mid-approval"). An approval's first write stamps decided_by on the
+// Recovery of approvals that stopped partway (Roster Spec: "When
+// something fails"). An approval's first write stamps decided_by on the
 // still-pending request; its last marks it approved. A pending request with
 // decided_by set stopped in between, because the bot died or a call failed:
 // one that had written nothing goes back to pending, and one that had started
@@ -144,7 +144,7 @@ async function reapplyTrainers(guildId: string, league: League, history: History
 }
 
 // The Discord roles each history row's before and after values call for. This
-// gives the same roles as the Spec's "Discord roles" table for every request type.
+// gives the same roles as the Roster Spec's "What each change does" table for every request type.
 function roleChanges(league: League, history: History[]): RoleChange[] {
   const { roles } = getLeagueConfig();
   return history.map((h) => {

@@ -1,4 +1,4 @@
-// /roster: roster requests from leaders and managers (Spec: "Roster requests").
+// /roster: roster requests from leaders and managers (Roster Spec: "Commands").
 import { displayName, type Member } from '../discord.js';
 import type { CommandHandler, CommandInteraction } from '../interactions.js';
 import { isStaff } from '../roster/approval.js';
@@ -166,8 +166,8 @@ function updateChange(
   return `${mention(targetId)} is already ${labels.join(' and ')}, so there's nothing to request.`;
 }
 
-// A trainer has at most one pending request (Spec: "No other pending request for
-// the same trainer"), so the trainer names the request.
+// A trainer has at most one pending request (Roster Spec: "Checks"), so the
+// trainer names the request.
 const cancelRequest: CommandHandler = async (interaction) => {
   const targetId = String(subOptions(interaction).trainer);
   const [requests] = await readTabs('rosterRequests');

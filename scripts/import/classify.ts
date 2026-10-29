@@ -1,5 +1,5 @@
 // Turns the Discord role and member lists into the gyms and trainers the
-// import writes, plus everyone it skips. Pure: no I/O. Spec: "Initial population".
+// import writes, plus everyone it skips. Pure: no I/O. Bot Spec: "Initial population".
 import type { LeagueConfig } from '../../src/config.js';
 import { displayName, type Member, type Role } from '../../src/discord.js';
 

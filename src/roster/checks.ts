@@ -1,10 +1,10 @@
-// Request-time checks (Spec: "Roster requests"). Each returns the refusal message,
+// Request-time checks (Roster Spec: "Checks"). Each returns the refusal message,
 // or undefined when the check passes. Approval runs the same checks again.
 import { formatDate, isInSeason } from '../seasons.js';
 import { findGym, findTrainer, gymName, mention, seasonMoves, type Gym, type League, type Trainer } from './league.js';
 import { isGymRequest, roleLabel, type RequestType } from './requests.js';
 
-// A gym's fan role is its gym role's name plus this (Spec: "Initial population").
+// A gym's fan role is its gym role's name plus this (Bot Spec: "Initial population").
 export const FAN_SUFFIX = ' Fan';
 
 export type Leadership = 'leader' | 'manager';
@@ -140,7 +140,7 @@ export function checkUpdate(
   );
 }
 
-// Card warnings for a remove (Spec: "Shown as a warning on the staff card").
+// Card warnings for a remove (Roster Spec: "Checks").
 export function removeWarnings(league: League, targetId: string, gym: Gym): string[] {
   if (!isInSeason(league.season, league.today)) return [];
   if (findTrainer(league, targetId)?.role !== 'trainer') return [];

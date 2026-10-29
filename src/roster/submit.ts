@@ -1,4 +1,4 @@
-// Making and cancelling roster requests, shared by /roster and /gym (Spec: "Roster requests").
+// Making and cancelling roster requests, shared by /roster and /gym (Roster Spec: "Making a request").
 import { displayName, getMember } from '../discord.js';
 import type { CommandResult } from '../interactions.js';
 import { withLock } from '../locks.js';
@@ -29,7 +29,7 @@ export interface Submission {
 }
 
 // Checks the requester and the request, writes the Roster requests row and
-// posts the staff card (Spec: "On a valid request").
+// posts the staff card (Roster Spec: "Making a request").
 export async function submit(requester: Requester, s: Submission): Promise<string | CommandResult> {
   // Held from reading Roster requests to writing the new row: request IDs and the
   // "no other pending request" checks depend on no other request landing in between.

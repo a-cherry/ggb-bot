@@ -101,7 +101,7 @@ try {
   throw err;
 }
 
-// Before serving, finish any approval that stopped partway (Spec: "If the bot stops mid-approval").
+// Before serving, finish any approval that stopped partway (Roster Spec: "When something fails").
 try {
   await recoverApprovals(guildId);
 } catch (err) {

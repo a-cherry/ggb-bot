@@ -1,4 +1,4 @@
-// In season vs off-season (Spec: "Roster requests"). In season means today falls
+// In season vs off-season (Roster Spec: "Checks"). In season means today falls
 // between the active season's start and end dates, both inclusive, in UTC.
 import type { SheetRow } from './sheet-rows.js';
 

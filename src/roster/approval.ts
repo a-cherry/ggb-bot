@@ -1,4 +1,4 @@
-// Approve and Reject on a staff approval card (Spec: "Approval").
+// Approve and Reject on a staff approval card (Roster Spec: "Approval").
 import { getLeagueConfig } from '../config.js';
 import { cachedRoles, displayName, escapeMarkdown, getMember, postMessage, renderEmote, sheetEmote, type Member } from '../discord.js';
 import type { ComponentHandler, ComponentInteraction, ComponentResult } from '../interactions.js';
@@ -96,7 +96,7 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   if (refusal) return finish({ ...decided, status: 'refused', refusal_message: refusal });
 
   // First write: marks the approval as started, so if the bot dies before the
-  // last write, crash recovery finds it (Spec: "Approval"). A rebrand also keeps
+  // last write, crash recovery finds it (Roster Spec: "When something fails"). A rebrand also keeps
   // the gym's old name and emote here, for the announcement.
   const claimed: RosterRequest = { ...decided, change: claimChange(decided, gym) };
   await updateRows('rosterRequests', [{ rowNumber: row.rowNumber, values: claimed }]);
@@ -156,7 +156,7 @@ export function crashPoint(
   }
 }
 
-// Everything after the approved mark (Spec: "Approve", last step), apart from
+// Everything after the approved mark (Roster Spec: "Approval", step 8), apart from
 // the card, which the caller edits. Each step runs even if an earlier one
 // failed. Returns a line for the card for each step that failed, for staff to
 // fix by hand.
@@ -246,8 +246,8 @@ export interface Applied {
   outdated?: RosterRequest[]; // other requests the approval made outdated, whose cards need closing
 }
 
-// Writes Roster history and Trainers (Spec: "What each change writes") and
-// returns the announcement and role changes (Spec: "Discord roles"). `req`
+// Writes Roster history and Trainers (Roster Spec: "What each change does") and
+// returns the announcement and role changes (same section). `req`
 // carries who decided and when, for requests a disband makes outdated.
 async function apply(guildId: string, league: League, req: RosterRequest, gym: Gym): Promise<Applied> {
   // The members writeTrainers reads for their names; their roles let the role
@@ -381,7 +381,7 @@ export async function closeGym(league: League, req: RosterRequest, gym: Gym): Pr
   return outdated.map((r) => r.values);
 }
 
-// The transfer announcement (Spec: "Announcements"). `gym` is the gym as it was
+// The transfer announcement (Roster Spec: "Announcements"). `gym` is the gym as it was
 // before the request: a rebrand announces its old name and emote.
 export async function announcementFor(guildId: string, req: RosterRequest, gym: Gym): Promise<string> {
   const change = parseChange(req.change);
@@ -412,7 +412,7 @@ interface TrainerChange {
 
 // One Roster history row per changed trainer, then their Trainers rows. A member
 // with no Trainers row gets one. Names are refreshed from Discord in the same
-// write (Spec: "Refresh on touch"); the members read are kept in `members`.
+// write (Bot Spec: "Nickname sync"); the members read are kept in `members`.
 async function writeTrainers(
   guildId: string, league: League, req: RosterRequest, members: Map<string, Member | undefined>, changes: TrainerChange[],
 ): Promise<void> {
