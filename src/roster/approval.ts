@@ -13,6 +13,7 @@ import { findGym, gymName, loadLeague, mention, type Gym, type League, type Trai
 import {
   closeApprovalCard, formatChange, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
 } from './requests.js';
+import { recoverRequest } from './recovery.js';
 
 async function isStaff(guildId: string, member: Member): Promise<boolean> {
   const staff = new Set(getLeagueConfig().staffRoles);
@@ -61,6 +62,17 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
       reply: `${requestId} was already ${row.values.status}.`,
     };
   }
+  // An approval that stopped partway: finish it rather than check it again,
+  // since its trainers may already have moved. Reject finishes it too.
+  if (row.values.decided_by) {
+    const outcome = await recoverRequest(interaction.guild_id, requestId);
+    // Nothing had been written, so it's plain pending again: decide it as usual.
+    if (!outcome) return decide(interaction, requestId, approve);
+    return {
+      message: withOutcome(card, outcome),
+      reply: approve ? undefined : `${requestId} was already partly approved, so the approval was finished instead.`,
+    };
+  }
 
   const decided: RosterRequest = {
     ...row.values,
@@ -87,15 +99,36 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   // the gym's old name and emote here, for the announcement.
   const claimed: RosterRequest = { ...decided, change: claimChange(decided, gym) };
   await updateRows('rosterRequests', [{ rowNumber: row.rowNumber, values: claimed }]);
-  crashPoint('claimed');
 
-  const applied = await apply(interaction.guild_id, league, claimed, gym);
-  crashPoint('written');
-  // Last write: if the bot dies before this, crash recovery finishes the request.
-  const result = await finish({ ...claimed, status: 'approved' });
+  let applied: Applied;
+  let result: ComponentResult;
+  try {
+    crashPoint('claimed');
+    applied = await apply(interaction.guild_id, league, claimed, gym);
+    crashPoint('written');
+    // Last write: if the approval stops before this, recovery finishes the request.
+    result = await finish({ ...claimed, status: 'approved' });
+  } catch (err) {
+    return stoppedPartway(interaction.guild_id, requestId, card, err);
+  }
 
   const roleFailure = await afterApproval(interaction.guild_id, applied);
   return roleFailure ? { message: `${result.message}\nDiscord roles not updated: ${roleFailure}` } : result;
+}
+
+// A call failed between the claim and the approved mark. Recovery finishes the
+// approval now if it can; otherwise the request stays claimed, and the next
+// Approve or Reject press finishes it.
+async function stoppedPartway(guildId: string, requestId: string, card: string, err: unknown): Promise<ComponentResult> {
+  console.error(`${requestId}: approval stopped partway:`, err);
+  try {
+    const outcome = await recoverRequest(guildId, requestId);
+    if (outcome) return { message: withOutcome(card, outcome) };
+    return { reply: `${requestId}'s approval failed before it changed anything, so it's pending again. Press Approve to try again.` };
+  } catch (err2) {
+    console.error(`${requestId}: finishing the stopped approval failed:`, err2);
+    return { reply: `${requestId}'s approval stopped partway. Press Approve again to finish it.` };
+  }
 }
 
 function claimChange(req: RosterRequest, gym: Gym): string {
@@ -103,12 +136,19 @@ function claimChange(req: RosterRequest, gym: Gym): string {
   return formatChange({ ...parseChange(req.change), old_name: gym.name, old_emote: gym.emote });
 }
 
-// For testing crash recovery in development: GGB_CRASH_AT=claimed, history or
-// written stops the bot at that point of an approval.
-export function crashPoint(point: 'claimed' | 'history' | 'written'): void {
-  if (process.env.GGB_CRASH_AT !== point) return;
-  console.error(`GGB_CRASH_AT=${point}: stopping the bot mid-approval`);
-  process.exit(1);
+// For testing recovery in development. GGB_CRASH_AT=claimed, history, written
+// or recovery stops the bot at that point; GGB_FAIL_AT, a comma-separated list
+// of the same points, throws once at each, as a failed Sheets or Discord call would.
+const failed = new Set<string>();
+export function crashPoint(point: 'claimed' | 'history' | 'written' | 'recovery'): void {
+  if (process.env.GGB_CRASH_AT === point) {
+    console.error(`GGB_CRASH_AT=${point}: stopping the bot mid-approval`);
+    process.exit(1);
+  }
+  if ((process.env.GGB_FAIL_AT ?? '').split(',').includes(point) && !failed.has(point)) {
+    failed.add(point);
+    throw new Error(`GGB_FAIL_AT=${point}: failing here once`);
+  }
 }
 
 // Everything after the approved mark (Spec: "Approve", step 7), apart from the

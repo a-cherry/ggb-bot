@@ -197,9 +197,8 @@ export function checkRebrand(
   }
   const own = [gym.name, `${gym.name}${FAN_SUFFIX}`];
   for (const name of [change.name, `${change.name}${FAN_SUFFIX}`]) {
-    if (roleNames.some((r) => same(r, name) && !own.some((o) => same(o, r)))) {
-      return `Gyms cannot be named after GGB staff roles.`;
-    }
+    const clash = roleNames.find((r) => same(r, name) && !own.some((o) => same(o, r)));
+    if (clash) return `${clash} is already a role in this server, so a gym can't use that name.`;
   }
   return checkNoPendingGymRequest(league, gym, exceptRequestId);
 }

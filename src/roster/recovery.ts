@@ -1,13 +1,14 @@
-// Crash recovery (Spec: "Approve", step 6). An approval's first write stamps
-// decided_by on the still-pending request; its last marks it approved. On
-// startup, a pending request with decided_by set was mid-approval when the bot
-// stopped: one that had written nothing goes back to pending, and one that had
-// started writing is finished without re-checking.
+// Recovery of approvals that stopped partway (Spec: "If the bot stops
+// mid-approval"). An approval's first write stamps decided_by on the
+// still-pending request; its last marks it approved. A pending request with
+// decided_by set stopped in between, because the bot died or a call failed:
+// one that had written nothing goes back to pending, and one that had started
+// writing is finished without re-checking.
 import { getLeagueConfig } from '../config.js';
 import { displayName, getMember, sheetEmote } from '../discord.js';
 import { withLock } from '../locks.js';
 import { appendRows, updateRows, type Row, type SheetRow } from '../sheet-rows.js';
-import { afterApproval, announcementFor, closeGym, outcomeLine } from './approval.js';
+import { afterApproval, announcementFor, closeGym, crashPoint, outcomeLine } from './approval.js';
 import { FAN_SUFFIX } from './checks.js';
 import type { RoleChange } from './discord-roles.js';
 import { findGym, gymName, loadLeague, type Gym, type League, type Trainer } from './league.js';
@@ -20,14 +21,23 @@ export async function recoverApprovals(guildId: string): Promise<void> {
   const started = league.requests.filter((r) => r.values.status === 'pending' && r.values.decided_by);
   for (const { values } of started) {
     try {
-      await withLock(`gym:${values.gym_id}`, () => recover(guildId, values.request_id));
+      await withLock(`gym:${values.gym_id}`, async () => {
+        const outcome = await recoverRequest(guildId, values.request_id);
+        if (outcome && !(await closeApprovalCard(values.request_id, outcome))) {
+          console.error(`${values.request_id}: staff card not found to mark approved`);
+        }
+      });
     } catch (err) {
       console.error(`${values.request_id}: crash recovery failed:`, err);
     }
   }
 }
 
-async function recover(guildId: string, requestId: string): Promise<void> {
+// Finishes or resets one stopped approval; the caller holds the gym's lock.
+// Returns the card's outcome lines when it finished the approval, or nothing
+// when the request is plain pending again.
+export async function recoverRequest(guildId: string, requestId: string): Promise<string | undefined> {
+  crashPoint('recovery');
   // Read again for each request: finishing one can change what the next sees.
   const league = await loadLeague();
   const row = league.requests.find((r) => r.values.request_id === requestId)!;
@@ -38,8 +48,8 @@ async function recover(guildId: string, requestId: string): Promise<void> {
   if (!started(req, gym, history)) {
     // Staff approve it again from its card, which still has its buttons.
     await updateRows('rosterRequests', [{ rowNumber: row.rowNumber, values: { ...req, decided_by: '', decided_at: '' } }]);
-    console.log(`${requestId}: the bot stopped before this approval wrote anything; it's pending again`);
-    return;
+    console.log(`${requestId}: the approval stopped before it wrote anything; it's pending again`);
+    return undefined;
   }
 
   // History is written in one call before anything else, so it holds every
@@ -48,7 +58,7 @@ async function recover(guildId: string, requestId: string): Promise<void> {
   const outdated = req.type === 'disband' ? await closeGym(league, req, gym) : [];
   const approved: RosterRequest = { ...req, status: 'approved' };
   await updateRows('rosterRequests', [{ rowNumber: row.rowNumber, values: approved }]);
-  console.log(`${requestId}: finished an approval the bot stopped in the middle of`);
+  console.log(`${requestId}: finished an approval that stopped partway`);
 
   const change = parseChange(req.change);
   // The claim write kept a rebrand's old name and emote; the Gyms row already has the new ones.
@@ -71,12 +81,7 @@ async function recover(guildId: string, requestId: string): Promise<void> {
     ],
   });
 
-  const outcome = [outcomeLine(approved), ...(roleFailure ? [`Discord roles not updated: ${roleFailure}`] : [])];
-  try {
-    if (!(await closeApprovalCard(requestId, outcome.join('\n')))) console.error(`${requestId}: staff card not found to mark approved`);
-  } catch (err) {
-    console.error(`${requestId}: staff card could not be marked approved:`, err);
-  }
+  return [outcomeLine(approved), ...(roleFailure ? [`Discord roles not updated: ${roleFailure}`] : [])].join('\n');
 }
 
 // Whether the approval wrote anything to the League DB before the bot stopped.

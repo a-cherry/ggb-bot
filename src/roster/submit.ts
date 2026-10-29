@@ -72,6 +72,8 @@ export async function cancel(
     const league = await loadLeague();
     const row = league.requests.find((r) => r.values.request_id === requestId)!;
     if (row.values.status !== 'pending') return `${what} ${requestId} was already ${row.values.status}.`;
+    // An approval that stopped partway; staff finish it from the card.
+    if (row.values.decided_by) return `Staff are approving ${what} ${requestId}, so it can't be cancelled.`;
     const checked = checkRequester(league, requester.id, allowed);
     if ('refusal' in checked) return checked.refusal;
     if (checked.gym.gym_id !== row.values.gym_id) {
