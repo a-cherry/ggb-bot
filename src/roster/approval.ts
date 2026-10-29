@@ -112,8 +112,8 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
     return stoppedPartway(interaction.guild_id, requestId, card, err);
   }
 
-  const roleFailure = await afterApproval(interaction.guild_id, applied);
-  return roleFailure ? { message: `${result.message}\nDiscord roles not updated: ${roleFailure}` } : result;
+  const problems = await afterApproval(interaction.guild_id, applied);
+  return problems.length ? { message: [result.message, ...problems].join('\n') } : result;
 }
 
 // A call failed between the claim and the approved mark. Recovery finishes the
@@ -137,11 +137,14 @@ function claimChange(req: RosterRequest, gym: Gym): string {
 }
 
 // For testing failures in development. GGB_CRASH_AT=claimed, history, written
-// or recovery stops the bot at that point; GGB_FAIL_AT, a comma-separated list
-// of those points or card (posting a new request's staff card), throws once at
-// each, as a failed Sheets or Discord call would.
+// or recovery stops the bot at that point. GGB_FAIL_AT, a comma-separated list
+// of those points, card (posting a new request's staff card), views, role (one
+// member's role) or announce, throws once at each, as a failed Sheets or
+// Discord call would.
 const failed = new Set<string>();
-export function crashPoint(point: 'claimed' | 'history' | 'written' | 'recovery' | 'card'): void {
+export function crashPoint(
+  point: 'claimed' | 'history' | 'written' | 'recovery' | 'card' | 'views' | 'role' | 'announce',
+): void {
   if (process.env.GGB_CRASH_AT === point) {
     console.error(`GGB_CRASH_AT=${point}: stopping the bot mid-approval`);
     process.exit(1);
@@ -152,28 +155,45 @@ export function crashPoint(point: 'claimed' | 'history' | 'written' | 'recovery'
   }
 }
 
-// Everything after the approved mark (Spec: "Approve", step 7), apart from the
-// card, which the caller edits. Returns why Discord roles weren't updated, if they weren't.
-export async function afterApproval(guildId: string, applied: Applied): Promise<string | undefined> {
-  await rebuildViews();
-  const roleFailure =
-    (await renameRoles(guildId, applied.renames ?? [])) ?? (await applyRoleChanges(guildId, applied.roles));
-  await announce(applied.announcement);
-  await closeCards(applied.outdated ?? []);
-  return roleFailure;
+// Everything after the approved mark (Spec: "Approve", last step), apart from
+// the card, which the caller edits. Each step runs even if an earlier one
+// failed. Returns a line for the card for each step that failed, for staff to
+// fix by hand.
+export async function afterApproval(guildId: string, applied: Applied): Promise<string[]> {
+  const problems: string[] = [];
+  const step = async (problem: string, run: () => Promise<string | undefined>) => {
+    try {
+      const failure = await run();
+      if (failure) problems.push(`${problem}: ${failure}`);
+    } catch (err) {
+      console.error(`${problem}:`, err);
+      problems.push(`${problem}: an error, see the bot's log`);
+    }
+  };
+  await step('League Stats views not rebuilt', async () => {
+    crashPoint('views');
+    await rebuildViews();
+    return undefined;
+  });
+  await step('Discord roles not renamed', () => renameRoles(guildId, applied.renames ?? []));
+  await step('Discord roles not updated', () => applyRoleChanges(guildId, applied.roles));
+  await step('Announcement not posted', () => announce(applied.announcement));
+  await step('Cards not closed', () => closeCards(applied.outdated ?? []));
+  return problems;
 }
 
-// The cards of requests a disband made outdated.
-async function closeCards(requests: RosterRequest[]): Promise<void> {
+// The cards of requests a disband made outdated. Returns the ones not closed.
+async function closeCards(requests: RosterRequest[]): Promise<string | undefined> {
+  const notClosed: string[] = [];
   for (const req of requests) {
     try {
-      if (!(await closeApprovalCard(req.request_id, outcomeLine(req)))) {
-        console.error(`${req.request_id}: staff card not found to mark outdated`);
-      }
+      if (!(await closeApprovalCard(req.request_id, outcomeLine(req)))) notClosed.push(`${req.request_id} (not found)`);
     } catch (err) {
       console.error(`${req.request_id}: staff card could not be marked outdated:`, err);
+      notClosed.push(req.request_id);
     }
   }
+  return notClosed.length ? `${notClosed.join(', ')}, now outdated` : undefined;
 }
 
 // A member with no Trainers row compares as the row an add would create for them.
@@ -434,15 +454,10 @@ function historyRow(
 
 const emotePrefix = async (guildId: string, gym: Gym) => (gym.emote ? `${await renderEmote(guildId, gym.emote)} ` : '');
 
-async function announce(text: string): Promise<void> {
+async function announce(text: string): Promise<string | undefined> {
   const channelId = process.env.DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID;
-  if (!channelId) {
-    console.error('DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID is not set; announcement not posted:', text);
-    return;
-  }
-  try {
-    await postMessage(channelId, text);
-  } catch (err) {
-    console.error('transfer announcement failed to post:', text, err);
-  }
+  if (!channelId) return 'DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID is not set';
+  crashPoint('announce');
+  await postMessage(channelId, text);
+  return undefined;
 }

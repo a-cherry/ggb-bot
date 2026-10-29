@@ -63,7 +63,7 @@ export async function recoverRequest(guildId: string, requestId: string): Promis
   const change = parseChange(req.change);
   // The claim write kept a rebrand's old name and emote; the Gyms row already has the new ones.
   const before: Gym = req.type === 'rebrand' ? { ...gym, name: change.old_name, emote: change.old_emote } : gym;
-  const roleFailure = await afterApproval(guildId, {
+  const problems = await afterApproval(guildId, {
     announcement: await announcementFor(guildId, req, before),
     roles: roleChanges(league, history),
     renames: req.type === 'rebrand'
@@ -81,7 +81,7 @@ export async function recoverRequest(guildId: string, requestId: string): Promis
     ],
   });
 
-  return [outcomeLine(approved), ...(roleFailure ? [`Discord roles not updated: ${roleFailure}`] : [])].join('\n');
+  return [outcomeLine(approved), ...problems].join('\n');
 }
 
 // Whether the approval wrote anything to the League DB before the bot stopped.
