@@ -9,6 +9,7 @@ import { handleDisbandButton } from './commands/gym.js';
 import { deferredCommands } from './commands/index.js';
 import { runDeferred, runDeferredUpdate } from './interactions.js';
 import { handleDecision } from './roster/approval.js';
+import { recoverApprovals } from './roster/recovery.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const publicKey = process.env.DISCORD_PUBLIC_KEY;
@@ -64,5 +65,14 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
 
   res.status(400).send({ error: 'unknown interaction' });
 });
+
+// Before serving, finish any approval the bot stopped in the middle of (Spec: "Approve", step 6).
+const guildId = process.env.DISCORD_DEV_GUILD_ID;
+if (!guildId) throw new Error('DISCORD_DEV_GUILD_ID is not set');
+try {
+  await recoverApprovals(guildId);
+} catch (err) {
+  console.error('crash recovery failed:', err);
+}
 
 app.listen(PORT, () => console.log(`listening on ${PORT}`));

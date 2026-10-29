@@ -11,7 +11,7 @@ import {
 import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
 import { findGym, gymName, loadLeague, mention, type Gym, type League, type Trainer } from './league.js';
 import {
-  closeApprovalCard, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
+  closeApprovalCard, formatChange, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
 } from './requests.js';
 
 async function isStaff(guildId: string, member: Member): Promise<boolean> {
@@ -42,7 +42,7 @@ export const handleDecision: ComponentHandler = async (interaction) => {
 // The card's text plus its outcome line; the runner removes the buttons.
 const withOutcome = (card: string, outcome: string) => `${card}\n${outcome}`;
 
-function outcomeLine(req: RosterRequest): string {
+export function outcomeLine(req: RosterRequest): string {
   switch (req.status) {
     case 'approved': return '**Approved**';
     case 'rejected': return '**Rejected**';
@@ -82,17 +82,44 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   const refusal = recheck(league, row.values, gym, roleNames);
   if (refusal) return finish({ ...decided, status: 'refused', refusal_message: refusal });
 
-  const applied = await apply(interaction.guild_id, league, decided, gym);
-  // Last write: if the bot dies before this, crash recovery finishes the request.
-  const result = await finish({ ...decided, status: 'approved' });
+  // First write: marks the approval as started, so if the bot dies before the
+  // last write, crash recovery finds it (Spec: "Approval"). A rebrand also keeps
+  // the gym's old name and emote here, for the announcement.
+  const claimed: RosterRequest = { ...decided, change: claimChange(decided, gym) };
+  await updateRows('rosterRequests', [{ rowNumber: row.rowNumber, values: claimed }]);
+  crashPoint('claimed');
 
+  const applied = await apply(interaction.guild_id, league, claimed, gym);
+  crashPoint('written');
+  // Last write: if the bot dies before this, crash recovery finishes the request.
+  const result = await finish({ ...claimed, status: 'approved' });
+
+  const roleFailure = await afterApproval(interaction.guild_id, applied);
+  return roleFailure ? { message: `${result.message}\nDiscord roles not updated: ${roleFailure}` } : result;
+}
+
+function claimChange(req: RosterRequest, gym: Gym): string {
+  if (req.type !== 'rebrand') return req.change;
+  return formatChange({ ...parseChange(req.change), old_name: gym.name, old_emote: gym.emote });
+}
+
+// For testing crash recovery in development: GGB_CRASH_AT=claimed, history or
+// written stops the bot at that point of an approval.
+export function crashPoint(point: 'claimed' | 'history' | 'written'): void {
+  if (process.env.GGB_CRASH_AT !== point) return;
+  console.error(`GGB_CRASH_AT=${point}: stopping the bot mid-approval`);
+  process.exit(1);
+}
+
+// Everything after the approved mark (Spec: "Approve", step 7), apart from the
+// card, which the caller edits. Returns why Discord roles weren't updated, if they weren't.
+export async function afterApproval(guildId: string, applied: Applied): Promise<string | undefined> {
   await rebuildViews();
   const roleFailure =
-    (await renameRoles(interaction.guild_id, applied.renames ?? [])) ??
-    (await applyRoleChanges(interaction.guild_id, applied.roles));
+    (await renameRoles(guildId, applied.renames ?? [])) ?? (await applyRoleChanges(guildId, applied.roles));
   await announce(applied.announcement);
   await closeCards(applied.outdated ?? []);
-  return roleFailure ? { message: `${result.message}\nDiscord roles not updated: ${roleFailure}` } : result;
+  return roleFailure;
 }
 
 // The cards of requests a disband made outdated.
@@ -156,7 +183,7 @@ function recheck(league: League, req: RosterRequest, gym: Gym, roleNames: string
   }
 }
 
-interface Applied {
+export interface Applied {
   announcement: string;
   roles: RoleChange[]; // Discord roles to change once the request is approved
   renames?: RoleRename[];
@@ -169,14 +196,14 @@ interface Applied {
 async function apply(guildId: string, league: League, req: RosterRequest, gym: Gym): Promise<Applied> {
   const change = parseChange(req.change);
   const { roles } = getLeagueConfig();
-  const gymLine = `${await emotePrefix(guildId, gym)}**${gym.name}**`;
+  const announcement = await announcementFor(guildId, req, gym);
   switch (req.type as RequestType) {
     case 'add': {
       await writeTrainers(guildId, league, req, [
         { discordId: req.target, set: { gym_id: gym.gym_id, role: change.role, leadership: 'none' } },
       ]);
       return {
-        announcement: `${gymLine} has added ${mention(req.target)} to their roster`,
+        announcement,
         roles: [{
           userId: req.target,
           add: [gym.name, roles.participatingTrainer, ...(change.role === 'non-playing' ? [roles.nonPlayer] : [])],
@@ -189,7 +216,7 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
         { discordId: req.target, set: { gym_id: '', role: 'trainer', leadership: 'none' } },
       ]);
       return {
-        announcement: `${gymLine} has removed ${mention(req.target)} from their roster`,
+        announcement,
         // They keep Participating Trainer: with no gym role, that reads as a free agent.
         roles: [{ userId: req.target, add: [], remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer] }],
       };
@@ -226,7 +253,7 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
       }
       await writeTrainers(guildId, league, req, [{ discordId: req.target, set }, ...others]);
       return {
-        announcement: `${gymLine} has promoted ${mention(req.target)} to ${promotionLabel(req)}`,
+        announcement,
         roles: [target, ...otherRoles],
       };
     }
@@ -235,7 +262,7 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
       const rebranded: Gym = { ...gym, name: change.name, abbreviation: change.abbreviation, emote: sheetEmote(change.emote) };
       await updateGym(league, rebranded);
       return {
-        announcement: `${gymLine} has rebranded to ${change.emote} **${change.name}**`,
+        announcement,
         roles: [],
         // Renamed, not replaced: members keep the role, and any channel access it grants.
         renames: [
@@ -250,36 +277,61 @@ async function apply(guildId: string, league: League, req: RosterRequest, gym: G
         discordId: t.discord_id,
         set: { gym_id: '', role: 'trainer', leadership: 'none' },
       })));
-      await updateGym(league, { ...gym, status: 'inactive' });
-      // The gym's other pending requests can no longer be approved.
-      const outdated = league.requests
-        .filter((r) => r.values.gym_id === gym.gym_id && r.values.status === 'pending' && r.values.request_id !== req.request_id)
-        .map((r) => ({
-          rowNumber: r.rowNumber,
-          values: {
-            ...r.values,
-            status: 'outdated',
-            decided_by: req.decided_by,
-            decided_at: req.decided_at,
-            refusal_message: `${gym.name} was disbanded (${req.request_id}).`,
-          },
-        }));
-      await updateRows('rosterRequests', outdated);
+      const outdated = await closeGym(league, req, gym);
       return {
-        announcement: `${gymLine} has disbanded`,
+        announcement,
         // The gym role itself is kept; members keep Participating Trainer, as on a remove.
         roles: members.map((t) => ({
           userId: t.discord_id,
           add: [],
           remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer],
         })),
-        outdated: outdated.map((r) => r.values),
+        outdated,
       };
     }
   }
 }
 
-async function updateGym(league: League, gym: Gym): Promise<void> {
+// A disband's Gyms write: the gym becomes inactive, and its other pending
+// requests, which can no longer be approved, become outdated. Returns those.
+export async function closeGym(league: League, req: RosterRequest, gym: Gym): Promise<RosterRequest[]> {
+  await updateGym(league, { ...gym, status: 'inactive' });
+  const outdated = league.requests
+    .filter((r) => r.values.gym_id === gym.gym_id && r.values.status === 'pending' && r.values.request_id !== req.request_id)
+    .map((r) => ({
+      rowNumber: r.rowNumber,
+      values: {
+        ...r.values,
+        status: 'outdated',
+        decided_by: req.decided_by,
+        decided_at: req.decided_at,
+        refusal_message: `${gym.name} was disbanded (${req.request_id}).`,
+      },
+    }));
+  await updateRows('rosterRequests', outdated);
+  return outdated.map((r) => r.values);
+}
+
+// The transfer announcement (Spec: "Announcements"). `gym` is the gym as it was
+// before the request: a rebrand announces its old name and emote.
+export async function announcementFor(guildId: string, req: RosterRequest, gym: Gym): Promise<string> {
+  const change = parseChange(req.change);
+  const gymLine = `${await emotePrefix(guildId, gym)}**${gym.name}**`;
+  switch (req.type as RequestType) {
+    case 'add':
+      return `${gymLine} has added ${mention(req.target)} to their roster`;
+    case 'remove':
+      return `${gymLine} has removed ${mention(req.target)} from their roster`;
+    case 'update-trainer':
+      return `${gymLine} has promoted ${mention(req.target)} to ${promotionLabel(req)}`;
+    case 'rebrand':
+      return `${gymLine} has rebranded to ${change.emote} **${change.name}**`;
+    case 'disband':
+      return `${gymLine} has disbanded`;
+  }
+}
+
+export async function updateGym(league: League, gym: Gym): Promise<void> {
   const row = league.gyms.find((g) => g.values.gym_id === gym.gym_id)!;
   await updateRows('gyms', [{ rowNumber: row.rowNumber, values: gym }]);
 }
@@ -316,6 +368,7 @@ async function writeTrainers(guildId: string, league: League, req: RosterRequest
     else appends.push(after);
   }
   await appendRows('rosterHistory', history);
+  crashPoint('history');
   await updateRows('trainers', updates);
   await appendRows('trainers', appends);
 }
