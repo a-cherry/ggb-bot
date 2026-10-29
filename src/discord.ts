@@ -36,6 +36,13 @@ const CALL_TIMEOUT_MS = 15_000;
 const MAX_RATE_LIMIT_WAITS = 5;
 const MAX_RATE_LIMIT_WAIT_S = 60;
 
+// The path for logs, without the interaction token, which can post as the bot until it expires.
+const logPath = (path: string) => path.replace(/^(\/webhooks\/\d+\/)[^/]+/, '$1<token>');
+
+// Discord markdown in user-typed text (e.g. a gym name), escaped so it shows as
+// typed: no bold, masked links or fake mentions.
+export const escapeMarkdown = (text: string) => text.replace(/[\\*_~`|<>[\]()]/g, '\\$&');
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = process.env.DISCORD_BOT_TOKEN;
   if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
@@ -59,7 +66,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
         continue;
       }
     }
-    if (!res.ok) throw new DiscordError(`Discord ${method} ${path}: ${res.status} ${await res.text()}`, res.status);
+    if (!res.ok) throw new DiscordError(`Discord ${method} ${logPath(path)}: ${res.status} ${await res.text()}`, res.status);
     // 204 No Content: role changes return no body.
     return (res.status === 204 ? undefined : await res.json()) as T;
   }

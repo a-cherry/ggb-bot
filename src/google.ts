@@ -1,10 +1,7 @@
 import { google } from 'googleapis';
-import type { sheets_v4, drive_v3 } from 'googleapis';
+import type { sheets_v4 } from 'googleapis';
 
-const SCOPES = [
-  'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.readonly',
-];
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 // A call that gets no answer in this time fails, so one hung call can't hold a lock forever.
 const CALL_TIMEOUT_MS = 30_000;
@@ -33,7 +30,7 @@ const RETRY = {
   },
 };
 
-let clients: { sheets: sheets_v4.Sheets; drive: drive_v3.Drive } | undefined;
+let clients: { sheets: sheets_v4.Sheets } | undefined;
 
 function getClients() {
   if (clients) return clients;
@@ -46,10 +43,8 @@ function getClients() {
   const options = { auth, timeout: CALL_TIMEOUT_MS, retryConfig: RETRY };
   clients = {
     sheets: google.sheets({ version: 'v4', ...options }),
-    drive: google.drive({ version: 'v3', ...options }),
   };
   return clients;
 }
 
 export const getSheets = () => getClients().sheets;
-export const getDrive = () => getClients().drive;

@@ -1,5 +1,5 @@
 // /gym: rebrand and disband requests from a gym's leader (Spec: "Roster requests").
-import { cachedRoles, parseEmote, renderEmote, type ActionRow } from '../discord.js';
+import { cachedRoles, escapeMarkdown, parseEmote, renderEmote, type ActionRow } from '../discord.js';
 import type { CommandHandler, CommandInteraction, ComponentHandler, ComponentResult } from '../interactions.js';
 import { checkDisband, checkRebrand, checkRequester } from '../roster/checks.js';
 import { loadLeague, type Gym } from '../roster/league.js';
@@ -103,7 +103,7 @@ async function disbandable(requester: Requester, gymId?: string): Promise<Gym | 
 }
 
 const gymLine = async (guildId: string, gym: Gym) =>
-  `${gym.emote ? `${await renderEmote(guildId, gym.emote)} ` : ''}**${gym.name}**`;
+  `${gym.emote ? `${await renderEmote(guildId, gym.emote)} ` : ''}**${escapeMarkdown(gym.name)}**`;
 
 const disbandButtons = (gymId: string, step: 'confirm' | 'final', label: string): ActionRow[] => [
   {

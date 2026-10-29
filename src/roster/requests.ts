@@ -1,6 +1,6 @@
 // Roster requests rows and their staff approval cards (Spec: "Roster requests", "Approval").
 import { getLeagueConfig } from '../config.js';
-import { cachedRoles, editMessage, listMessages, postMessage, type ActionRow } from '../discord.js';
+import { cachedRoles, editMessage, escapeMarkdown, listMessages, postMessage, type ActionRow } from '../discord.js';
 import type { Row } from '../sheet-rows.js';
 import { findTrainer, mention, type League } from './league.js';
 
@@ -60,7 +60,7 @@ export function describeChange(req: RosterRequest, gym: string): string {
     case 'update-trainer':
       return `promote ${mention(req.target)} to ${promotionLabel(req)}`;
     case 'rebrand':
-      return `rebrand ${gym} to ${change.emote} **${change.name}** (${change.abbreviation})`;
+      return `rebrand ${gym} to ${change.emote} **${escapeMarkdown(change.name)}** (${escapeMarkdown(change.abbreviation)})`;
     case 'disband':
       return `disband ${gym}`;
     default:
@@ -96,7 +96,7 @@ export function newRequest(
 // matched by exact name as in the import. Falls back to the plain name.
 export async function gymMention(guildId: string, gymName: string): Promise<string> {
   const role = (await cachedRoles(guildId)).find((r) => r.name === gymName);
-  return role ? `<@&${role.id}>` : gymName;
+  return role ? `<@&${role.id}>` : escapeMarkdown(gymName);
 }
 
 function staffChannelId(): string {

@@ -23,7 +23,7 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 | `src/roster/` | Roster requests: League DB reads, request checks, request rows and cards, approval |
 | `src/locks.ts` | In-memory locks (request IDs, one approval per gym at a time) |
 | `src/views.ts` | League Stats views rebuild (empty until the views are built) |
-| `src/google.ts` | Sheets and Drive clients for the service account |
+| `src/google.ts` | Sheets client for the service account, with timeouts and retries |
 | `src/schema.ts` | Every League DB tab and its columns, from the Spec |
 | `src/league-db.ts` | Checks the League DB tabs against the schema |
 | `src/discord.ts` | Discord REST calls: roles, members, messages, deferred replies |
@@ -54,6 +54,7 @@ Fill in `.env`:
 | `DISCORD_STAFF_CHANNEL_ID` | Right-click the staff channel > Copy Channel ID. Gets the import report and roster request approval cards |
 | `DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID` | Same, for the channel where approved roster changes are announced |
 | `DISCORD_MATCH_RESULTS_ANNOUNCEMENTS_CHANNEL_ID` | Same, for the channel where match results are announced (not used yet) |
+| `DISCORD_STAFF_ROLE_IDS` | The four staff roles (Server Owner, League CEO, Head Referee, Referee), comma-separated: Server Settings > Roles, right-click each > Copy Role ID. Only these can approve, reject and repost requests; checked by ID, so a role renamed to match can't pass |
 | `GOOGLE_SERVICE_ACCOUNT_KEY_B64` | `base64 -i key.json` of the service account's JSON key |
 | `GOOGLE_LEAGUE_DB_ID` | The League DB workbook URL: `docs.google.com/spreadsheets/d/<this part>/edit` |
 

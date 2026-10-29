@@ -178,6 +178,6 @@ const cancelRequest: CommandHandler = async (interaction) => {
 };
 
 const repostRequest: CommandHandler = async (interaction) => {
-  if (!(await isStaff(interaction.guild_id, interaction.member))) return 'Only staff can repost a request.';
+  if (!isStaff(interaction.member)) return 'Only staff can repost a request.';
   return repostCard(interaction.guild_id, String(subOptions(interaction).request_id).trim().toUpperCase());
 };

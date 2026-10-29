@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import {
+  InteractionResponseFlags,
   InteractionType,
   InteractionResponseType,
   verifyKeyMiddleware,
@@ -16,6 +17,8 @@ import { readTabs, SheetLayoutError } from './sheet-rows.js';
 const PORT = Number(process.env.PORT ?? 3000);
 const publicKey = process.env.DISCORD_PUBLIC_KEY;
 if (!publicKey) throw new Error('DISCORD_PUBLIC_KEY is not set');
+const guildId = process.env.DISCORD_GUILD_ID;
+if (!guildId) throw new Error('DISCORD_GUILD_ID is not set');
 
 const app = express();
 
@@ -35,6 +38,15 @@ app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyK
   // Stopping for a deploy: the new process handles anything that arrives now.
   if (shuttingDown) {
     res.status(503).send({ error: 'shutting down' });
+    return;
+  }
+
+  // Only the GGB server: the League DB belongs to it, and the bot could be added elsewhere.
+  if (interaction.type !== InteractionType.PING && interaction.guild_id !== guildId) {
+    res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { content: 'This bot only works in the GGB server.', flags: InteractionResponseFlags.EPHEMERAL },
+    });
     return;
   }
 
@@ -79,9 +91,6 @@ app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyK
 
   res.status(400).send({ error: 'unknown interaction' });
 });
-
-const guildId = process.env.DISCORD_GUILD_ID;
-if (!guildId) throw new Error('DISCORD_GUILD_ID is not set');
 
 // Refuse to start on a League DB whose header rows don't match src/schema.ts:
 // reads and writes go by column position. Staff are told why in their channel.

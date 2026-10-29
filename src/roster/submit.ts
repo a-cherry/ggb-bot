@@ -2,10 +2,10 @@
 import { displayName, getMember } from '../discord.js';
 import type { CommandResult } from '../interactions.js';
 import { withLock } from '../locks.js';
-import { appendRows, readTabs, updateRows, type SheetRow } from '../sheet-rows.js';
+import { appendRows, updateRows, type SheetRow } from '../sheet-rows.js';
 import { crashPoint } from './approval.js';
 import { checkRequester, leadershipFor, removeWarnings, type Leadership } from './checks.js';
-import { findGym, findTrainer, gymName, loadLeague, type Gym, type League, type Trainer } from './league.js';
+import { findGym, findTrainer, gymName, loadLeague, rememberRequest, requestInfo, type Gym, type League, type Trainer } from './league.js';
 import {
   cardText, closeApprovalCard, describeChange, gymMention, isGymRequest, newRequest, postApprovalCard, postStaffNotice,
   type RequestType,
@@ -45,6 +45,7 @@ export async function submit(requester: Requester, s: Submission): Promise<strin
 
     const req = newRequest(league, s.type, requester.id, s.targetId, checked.gym.gym_id, change);
     await appendRows('rosterRequests', [req]);
+    rememberRequest(req);
     return { req, gymName: checked.gym.name, warnings: s.warnings?.(league, checked.gym) ?? [], target };
   });
   if (typeof result === 'string') return result;
@@ -84,11 +85,10 @@ async function cardFailed(requestId: string, change: string): Promise<CommandRes
 // Posts a new staff card for a pending request, e.g. one whose card failed to
 // post. An old card that still has buttons is closed first, so only one is live.
 export async function repostCard(guildId: string, requestId: string): Promise<string> {
-  const [requests] = await readTabs('rosterRequests');
-  const found = requests.find((r) => r.values.request_id === requestId);
-  if (!found) return `${requestId} isn't in the Roster requests tab.`;
+  const info = await requestInfo(requestId);
+  if (!info) return `${requestId} isn't in the Roster requests tab.`;
   // The gym's lock, as in approval, so the request can't be decided while its card is replaced.
-  return withLock(`gym:${found.values.gym_id}`, async () => {
+  return withLock(`gym:${info.gym_id}`, async () => {
     const league = await loadLeague();
     const req = league.requests.find((r) => r.values.request_id === requestId)!.values;
     if (req.status !== 'pending') return `${requestId} was already ${req.status}, so there's nothing to repost.`;

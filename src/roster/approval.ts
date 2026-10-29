@@ -1,43 +1,43 @@
 // Approve and Reject on a staff approval card (Spec: "Approval").
 import { getLeagueConfig } from '../config.js';
-import { cachedRoles, displayName, getMember, postMessage, renderEmote, sheetEmote, type Member } from '../discord.js';
+import { cachedRoles, displayName, escapeMarkdown, getMember, postMessage, renderEmote, sheetEmote, type Member } from '../discord.js';
 import type { ComponentHandler, ComponentInteraction, ComponentResult } from '../interactions.js';
 import { withLock } from '../locks.js';
-import { appendRows, readTabs, updateRows, type Row, type SheetRow } from '../sheet-rows.js';
+import { appendRows, updateRows, type Row, type SheetRow } from '../sheet-rows.js';
 import { rebuildViews } from '../views.js';
 import {
   checkAdd, checkDisband, checkRebrand, checkRemove, checkRequester, checkUpdate, FAN_SUFFIX, leadershipFor,
 } from './checks.js';
 import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
-import { findGym, gymName, loadLeague, mention, type Gym, type League, type Trainer } from './league.js';
+import { findGym, gymName, loadLeague, mention, requestInfo, type Gym, type League, type Trainer } from './league.js';
 import {
   closeApprovalCards, formatChange, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
 } from './requests.js';
 import { recoverRequest } from './recovery.js';
 
-export async function isStaff(guildId: string, member: Member): Promise<boolean> {
-  const staff = new Set(getLeagueConfig().staffRoles);
-  const roles = await cachedRoles(guildId);
-  return member.roles.some((id) => staff.has(roles.find((r) => r.id === id)?.name ?? ''));
+// By role ID, not name: anyone who can create or rename a role could give one a staff role's name.
+export function isStaff(member: Member): boolean {
+  const staff = new Set((process.env.DISCORD_STAFF_ROLE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean));
+  if (!staff.size) throw new Error('DISCORD_STAFF_ROLE_IDS is not set');
+  return member.roles.some((id) => staff.has(id));
 }
 
 export const handleDecision: ComponentHandler = async (interaction) => {
   const [action, requestId] = interaction.data.custom_id.split(':');
-  if (!(await isStaff(interaction.guild_id, interaction.member))) {
+  if (!isStaff(interaction.member)) {
     return { reply: 'Only staff can approve or reject roster requests.' };
   }
 
   // The request's gym picks the lock; everything is read again once it's held.
-  const [requests] = await readTabs('rosterRequests');
-  const found = requests.find((r) => r.values.request_id === requestId);
-  if (!found) return { reply: `${requestId} isn't in the Roster requests tab.` };
+  const info = await requestInfo(requestId);
+  if (!info) return { reply: `${requestId} isn't in the Roster requests tab.` };
 
   // Approvals for one gym run one at a time, so two can't both pass the
   // non-playing limit or both change leadership. Rejects take it too, so a
   // reject can't land in the middle of an approval of the same request.
   const run = () => decide(interaction, requestId, action === 'approve');
   // Rebrands of different gyms also run one at a time, so two can't take the same name.
-  return withLock(`gym:${found.values.gym_id}`, () => (found.values.type === 'rebrand' ? withLock('rebrand', run) : run()));
+  return withLock(`gym:${info.gym_id}`, () => (info.type === 'rebrand' ? withLock('rebrand', run) : run()));
 };
 
 // The card's text plus its outcome line; the runner removes the buttons.
@@ -90,7 +90,8 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   if (outdated) return finish({ ...decided, status: 'outdated', refusal_message: outdated });
 
   const gym = findGym(league, row.values.gym_id)!; // the requester check above guarantees an active gym
-  const roleNames = (await cachedRoles(interaction.guild_id, true)).map((r) => r.name);
+  // Re-read for a rebrand, so a role staff just made is seen; nothing else uses them.
+  const roleNames = row.values.type === 'rebrand' ? (await cachedRoles(interaction.guild_id, true)).map((r) => r.name) : [];
   const refusal = recheck(league, row.values, gym, roleNames);
   if (refusal) return finish({ ...decided, status: 'refused', refusal_message: refusal });
 
@@ -384,7 +385,7 @@ export async function closeGym(league: League, req: RosterRequest, gym: Gym): Pr
 // before the request: a rebrand announces its old name and emote.
 export async function announcementFor(guildId: string, req: RosterRequest, gym: Gym): Promise<string> {
   const change = parseChange(req.change);
-  const gymLine = `${await emotePrefix(guildId, gym)}**${gym.name}**`;
+  const gymLine = `${await emotePrefix(guildId, gym)}**${escapeMarkdown(gym.name)}**`;
   switch (req.type as RequestType) {
     case 'add':
       return `${gymLine} has added ${mention(req.target)} to their roster`;
@@ -393,7 +394,7 @@ export async function announcementFor(guildId: string, req: RosterRequest, gym: 
     case 'update-trainer':
       return `${gymLine} has promoted ${mention(req.target)} to ${promotionLabel(req)}`;
     case 'rebrand':
-      return `${gymLine} has rebranded to ${change.emote} **${change.name}**`;
+      return `${gymLine} has rebranded to ${change.emote} **${escapeMarkdown(change.name)}**`;
     case 'disband':
       return `${gymLine} has disbanded`;
   }

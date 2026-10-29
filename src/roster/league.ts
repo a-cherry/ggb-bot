@@ -18,7 +18,25 @@ export async function loadLeague(): Promise<League> {
   const [trainers, gyms, requests, history, seasons] = await readTabs(
     'trainers', 'gyms', 'rosterRequests', 'rosterHistory', 'seasons',
   );
+  for (const r of requests) rememberRequest(r.values);
   return { trainers, gyms, requests, history, season: activeSeason(seasons), today: todayUtc() };
+}
+
+// A request's gym and type never change, so they're kept from every read.
+// A staff button needs the gym to pick its lock before it reads the sheet.
+const known = new Map<string, { gym_id: string; type: string }>();
+
+export function rememberRequest(req: { request_id: string; gym_id: string; type: string }): void {
+  known.set(req.request_id, { gym_id: req.gym_id, type: req.type });
+}
+
+// Reads Roster requests only for a request this process hasn't seen.
+export async function requestInfo(requestId: string): Promise<{ gym_id: string; type: string } | undefined> {
+  if (!known.has(requestId)) {
+    const [requests] = await readTabs('rosterRequests');
+    for (const r of requests) rememberRequest(r.values);
+  }
+  return known.get(requestId);
 }
 
 export const findTrainer = (league: League, discordId: string) =>
