@@ -28,7 +28,7 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Behavi
 | `src/discord.ts` | Discord REST calls: roles, members, messages, deferred replies |
 | `src/config.ts` | Loads `config/league.json`: import and staff role names, S4 relegated gyms |
 | `scripts/import.ts`, `scripts/import/` | The one-shot import of gyms and trainers |
-| `scripts/register-commands.ts` | Registers the slash commands in `src/commands/` to the dev guild |
+| `scripts/register-commands.ts` | Registers the slash commands in `src/commands/` to the server in `DISCORD_GUILD_ID` |
 | `scripts/db-setup.ts` | Builds all League DB tabs in an empty workbook |
 | `scripts/sheets-smoke.ts` | Writes and reads the `Bot state` tab to check Sheets access |
 
@@ -49,7 +49,7 @@ Fill in `.env`:
 |---|---|
 | `DISCORD_APPLICATION_ID`, `DISCORD_PUBLIC_KEY` | Discord Developer Portal > your app > General Information |
 | `DISCORD_BOT_TOKEN` | Developer Portal > Bot > Reset Token |
-| `DISCORD_DEV_GUILD_ID` | Right-click the test server > Copy Server ID (needs Developer Mode, below) |
+| `DISCORD_GUILD_ID` | The Discord server the bot runs in (the test server in development): right-click it > Copy Server ID (needs Developer Mode, below) |
 | `DISCORD_STAFF_CHANNEL_ID` | Right-click the staff channel > Copy Channel ID. Gets the import report and roster request approval cards |
 | `DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID` | Same, for the channel where approved roster changes are announced |
 | `DISCORD_MATCH_RESULTS_ANNOUNCEMENTS_CHANNEL_ID` | Same, for the channel where match results are announced (not used yet) |
@@ -72,7 +72,7 @@ The tunnel URL changes every time cloudflared restarts, so step 3 repeats each s
 |---|---|
 | `npm run dev` | Runs the server with reload on save |
 | `npm run build` / `npm start` | Compiles to `dist/` and runs the compiled server |
-| `npm run register` | Overwrites the dev guild's slash commands with the ones in `scripts/register-commands.ts` |
+| `npm run register` | Overwrites the slash commands in the `DISCORD_GUILD_ID` server with the ones in `scripts/register-commands.ts` |
 | `npm run db:setup` | Builds every League DB tab in the workbook at `GOOGLE_LEAGUE_DB_ID` |
 | `npm run sheets-smoke` | Checks the service account can read and write the workbook |
 | `npm run import -- --season N --dry-run` / `--commit [--force]` | Imports gyms and trainers from Discord (see Testing the import) |

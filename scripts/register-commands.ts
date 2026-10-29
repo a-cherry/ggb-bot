@@ -3,10 +3,10 @@ dotenv.config();
 import { commandDefinitions } from '../src/commands/index.js';
 
 const appId = process.env.DISCORD_APPLICATION_ID;
-const guildId = process.env.DISCORD_DEV_GUILD_ID;
+const guildId = process.env.DISCORD_GUILD_ID;
 const token = process.env.DISCORD_BOT_TOKEN;
 if (!appId || !guildId || !token) {
-  throw new Error('DISCORD_APPLICATION_ID, DISCORD_DEV_GUILD_ID and DISCORD_BOT_TOKEN must be set');
+  throw new Error('DISCORD_APPLICATION_ID, DISCORD_GUILD_ID and DISCORD_BOT_TOKEN must be set');
 }
 
 const res = await fetch(

@@ -32,8 +32,8 @@ if (!Number.isInteger(season) || season < 1) fail('--season <number> is required
 if (args['dry-run'] === args.commit) fail('pass exactly one of --dry-run or --commit');
 if (args.force && !args.commit) fail('--force only applies to --commit');
 
-const guildId = process.env.DISCORD_DEV_GUILD_ID;
-if (!guildId) fail('DISCORD_DEV_GUILD_ID is not set');
+const guildId = process.env.DISCORD_GUILD_ID;
+if (!guildId) fail('DISCORD_GUILD_ID is not set');
 const staffChannelId = process.env.DISCORD_STAFF_CHANNEL_ID;
 const spreadsheetId = getLeagueDbId();
 

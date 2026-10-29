@@ -67,8 +67,8 @@ app.post('/interactions', verifyKeyMiddleware(publicKey), (req, res) => {
 });
 
 // Before serving, finish any approval the bot stopped in the middle of (Spec: "Approve", step 6).
-const guildId = process.env.DISCORD_DEV_GUILD_ID;
-if (!guildId) throw new Error('DISCORD_DEV_GUILD_ID is not set');
+const guildId = process.env.DISCORD_GUILD_ID;
+if (!guildId) throw new Error('DISCORD_GUILD_ID is not set');
 try {
   await recoverApprovals(guildId);
 } catch (err) {
