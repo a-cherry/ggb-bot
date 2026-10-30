@@ -9,13 +9,14 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Spec**
 - **Discord HTTP interactions**, not a gateway bot. Discord POSTs each slash command or button press to `/interactions`; the bot answers within 3 seconds or defers and follows up. The bot always shows as offline in Discord; that's expected.
 - **Google Sheets is the database.** The bot reads and writes the League DB workbook through a Google service account. A workbook is reachable once it's shared with the service account's email.
 - **One always-on Node process.** Approval locks, the `/submit` and `/rebuild` lock, and the daily nickname sync schedule live in memory, so exactly one instance may run.
-- **Deploys.** On SIGTERM the bot stops taking interactions and waits up to 50 seconds for the ones in progress, so an approval isn't cut off halfway. Railway kills the old process as soon as it sends SIGTERM unless told to wait, so set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60` on the service. Leave `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` unset. Railway routes new interactions to the new process while the old one drains, so startup recovery leaves an approval claimed in the last 90 seconds alone until the old process has had time to finish it.
+- **Deploys.** On SIGTERM the bot stops taking interactions and waits up to 25 seconds for the ones in progress, so an approval isn't cut off halfway; one that runs longer is finished by startup recovery. The host must not run the old and new process at the same time (see Deploy). Startup recovery leaves an approval claimed in the last 150 seconds alone until it's that old, in case an old process is still finishing it.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `src/server.ts` | Express server: `POST /interactions` (signature-verified), `GET /health` |
+| `src/server.ts` | Express server: `POST /interactions` (signature-verified), `GET /health` (503 until startup finishes) |
+| `render.yaml` | Render Blueprint for the hosted bot (see Deploy) |
 | `src/interactions.ts` | Deferred slash command replies and button presses: acknowledge at once, fill in the result later |
 | `src/commands/` | Slash command definitions and handlers (`index.ts` lists them all) |
 | `src/sheet-rows.ts` | Typed read, append and update of League DB rows |
@@ -67,6 +68,29 @@ Turn on Discord Developer Mode (User Settings > Advanced > Developer Mode) to ge
 3. Paste the new URL plus `/interactions` into General Information > Interactions Endpoint URL in the dev app and save.
 
 The tunnel URL changes every time cloudflared restarts, so step 3 repeats each session. Run `npm run register` after any change to the command definitions.
+
+## Deploy
+
+The bot runs on Render as a Starter web service (always on), set up from `render.yaml` in the repo root: Render dashboard > New > Blueprint, connect the repo, and Render creates the service from the file. Creating it by hand works too with the same settings.
+
+| Setting | Value | Why |
+|---|---|---|
+| Plan and instances | Starter, 1 instance | Locks and recovery live in memory, so exactly one process may run. Never scale out |
+| Build | `npm ci --include=dev && npm run build` | TypeScript is a dev dependency |
+| Start | `node dist/server.js` | Not `npm start` or `npm run dev`, so SIGTERM reaches the bot itself |
+| Disk | 1 GB at `/var/data`, unused | A disk turns off Render's zero-downtime deploys, so the old process stops before the new one starts. Without it the two overlap for a minute or more, and the new one's startup recovery could take over an approval the old one is still writing. Don't remove it |
+| Health check | `/health` | Answers 503 until the League DB header check and startup recovery finish, then 200; 503 again after SIGTERM. Render sends traffic only once it's 200 |
+| Shutdown delay | Not set | Render won't set one on a service with a disk and kills 30 seconds after SIGTERM, so the bot drains for at most 25 |
+
+Each deploy has a few seconds of downtime between the old process stopping and the new one passing its health check. A button pressed then shows "This interaction failed"; pressing it again works.
+
+**Environment variables.** Every variable in the Setup table, set in the service's Environment tab; `render.yaml` lists them by name with `sync: false` and never holds values. Render sets `PORT` itself. Never set `GGB_CRASH_AT` or `GGB_FAIL_AT` on Render.
+
+**Discord.** After the first deploy is live, stop any local bot that uses the same League DB, then set the app's Interactions Endpoint URL (Developer Portal > General Information) to `https://<service>.onrender.com/interactions` and save. Discord sends a PING first, so a save that succeeds means the bot answered. Run `npm run register` from your machine, with `.env` pointing at the same app and server, whenever the command definitions change; the hosted bot doesn't register commands itself.
+
+**Logs.** On a deploy, expect the old process's `SIGTERM: N interaction(s) in progress` and `interactions finished after Ns` (or the 25-second timeout line) before the new one's `listening on 10000` and `startup finished; taking interactions`.
+
+**Railway.** The code is host-agnostic and runs on Railway too: set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60` so Railway waits for the drain, and leave `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` unset. Railway still sends new interactions to the new process while the old one drains; the 150-second recovery wait covers that.
 
 ## Scripts
 
