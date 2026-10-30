@@ -122,7 +122,7 @@ export async function cancel(
     const checked = checkRequester(league, requester.id, allowed);
     if ('refusal' in checked) return checked.refusal;
     if (checked.gym.gym_id !== row.values.gym_id) {
-      const who = allowed.length === 1 ? `its ${allowed[0]}` : 'its leader or manager';
+      const who = allowed.length === 1 ? `its ${allowed[0]}` : 'its leader or vice-leader';
       return `${what} ${requestId} is for ${gymName(league, row.values.gym_id)}, so only ${who} can cancel it.`;
     }
     const req = {

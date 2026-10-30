@@ -126,7 +126,7 @@ As server owner, in the Discord client:
 
     | Role(s) | Purpose |
     |---|---|
-    | `Participating Trainer`, `Gym Leader`, `Gym Manager`, `Non-Player` | Import marker roles |
+    | `Participating Trainer`, `Gym Leader`, `Gym Vice-Leader`, `Non-Player` | Import marker roles |
     | `Phoenix` + `Phoenix Fan`, `Frog EX` + `Frog EX Fan`, `Daybreak` + `Daybreak Fan` | Three active gyms |
     | `Team Skull` + `Team Skull Fan` | An S4 relegated gym; must come out `relegated`, not active |
 
@@ -140,7 +140,7 @@ Assign roles (right-click a member > Roles):
 |---|---|---|
 | You | Participating Trainer, Phoenix, Gym Leader | Imported, `leader` |
 | Alt1 | Participating Trainer, Phoenix, Non-Player | Imported, `non-playing` |
-| Alt2 | Participating Trainer, Frog EX, Gym Leader, Gym Manager | Imported, `leadership = none`, flagged |
+| Alt2 | Participating Trainer, Frog EX, Gym Leader, Gym Vice-Leader | Imported, `leadership = none`, flagged |
 | Alt3 | Participating Trainer, Phoenix, Frog EX | Not imported: more than one gym role |
 
 ```sh
@@ -155,11 +155,11 @@ Keep your roles; change the alts:
 
 | Member | Roles | Expected |
 |---|---|---|
-| Alt1 | Participating Trainer, Daybreak, Gym Manager | Imported to Daybreak, `manager` |
+| Alt1 | Participating Trainer, Daybreak, Gym Vice-Leader | Imported to Daybreak, `vice-leader` |
 | Alt2 | Participating Trainer, Phoenix, Team Skull | Not imported: more than one gym role (relegated gym roles count) |
 | Alt3 | Frog EX only | Not imported: gym role without Participating Trainer |
 
-Run the dry run again. Phoenix should show 1 Leader and 1 Participating trainer, Daybreak 1 Manager and 1 Participating trainer, Frog EX nobody, and "Both Gym Leader and Gym Manager" none.
+Run the dry run again. Phoenix should show 1 Leader and 1 Participating trainer, Daybreak 1 Vice-Leader and 1 Participating trainer, Frog EX nobody, and "Both Gym Leader and Gym Vice-Leader" none.
 
 ### 4. Commit
 
@@ -179,4 +179,4 @@ Roster and gym commands work only in `#transfer-request` and `#bot-staff`. Disco
 2. Open `/roster` > Add Channels, add "All Channels", `#transfer-request` and `#bot-staff`, set All Channels to ✗ and the other two to ✓, and save. Leave Role & Member Overrides empty. Do the same for `/gym`.
 3. Check from an account without Administrator. The server owner (and likely anyone with Administrator) still sees the command in every channel; that's expected.
 
-Approving a request also changes Discord roles, so the bot needs Manage Roles, with its role above every gym role and gym fan role (a rebrand renames both), Participating Trainer, Non-Player, Gym Leader and Gym Manager and below the staff roles (Roster Spec: "What each change does").
+Approving a request also changes Discord roles, so the bot needs Manage Roles, with its role above every gym role and gym fan role (a rebrand renames both), Participating Trainer, Non-Player, Gym Leader and Gym Vice-Leader and below the staff roles (Roster Spec: "What each change does").

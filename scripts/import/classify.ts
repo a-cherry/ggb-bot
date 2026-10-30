@@ -3,7 +3,7 @@
 import type { LeagueConfig } from '../../src/config.js';
 import { displayName, type Member, type Role } from '../../src/discord.js';
 
-export type Leadership = 'leader' | 'manager' | 'none';
+export type Leadership = 'leader' | 'vice-leader' | 'none';
 export type TrainerRole = 'trainer' | 'non-playing';
 
 export interface ImportedTrainer {
@@ -13,7 +13,7 @@ export interface ImportedTrainer {
   gym: string; // gym name; mapped to a gym_id on commit
   role: TrainerRole;
   leadership: Leadership;
-  bothLeaderAndManager: boolean;
+  bothLeaderAndViceLeader: boolean;
 }
 
 export interface SkippedMember {
@@ -48,7 +48,7 @@ export function classify(roles: Role[], members: Member[], config: LeagueConfig)
   const ids = {
     participating: roleId(config.roles.participatingTrainer),
     leader: roleId(config.roles.gymLeader),
-    manager: roleId(config.roles.gymManager),
+    viceLeader: roleId(config.roles.gymViceLeader),
     nonPlayer: roleId(config.roles.nonPlayer),
   };
 
@@ -67,7 +67,7 @@ export function classify(roles: Role[], members: Member[], config: LeagueConfig)
     const gyms = m.roles.flatMap((id) => gymRoleIds.get(id) ?? []).sort(byName);
     const allGyms = [...gyms, ...m.roles.flatMap((id) => relegatedRoleIds.get(id) ?? [])].sort(byName);
     const isLeader = has(ids.leader);
-    const isManager = has(ids.manager);
+    const isViceLeader = has(ids.viceLeader);
 
     if (!has(ids.participating)) {
       if (gyms.length > 0) result.gymRoleWithoutParticipating.push({ ...who, gyms });
@@ -80,14 +80,14 @@ export function classify(roles: Role[], members: Member[], config: LeagueConfig)
     // Free agents, staff who don't play, and a lone relegated gym role: skipped, not reported.
     if (gyms.length === 0) continue;
 
-    const both = isLeader && isManager;
+    const both = isLeader && isViceLeader;
     result.trainers.push({
       ...who,
       username: m.user.username,
       gym: gyms[0],
       role: has(ids.nonPlayer) ? 'non-playing' : 'trainer',
-      leadership: both ? 'none' : isLeader ? 'leader' : isManager ? 'manager' : 'none',
-      bothLeaderAndManager: both,
+      leadership: both ? 'none' : isLeader ? 'leader' : isViceLeader ? 'vice-leader' : 'none',
+      bothLeaderAndViceLeader: both,
     });
   }
 

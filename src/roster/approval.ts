@@ -287,7 +287,7 @@ async function applyChange(
       return {
         announcement,
         // They keep Participating Trainer: with no gym role, that reads as a free agent.
-        roles: [{ userId: req.target, add: [], remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer] }],
+        roles: [{ userId: req.target, add: [], remove: [gym.name, roles.gymLeader, roles.gymViceLeader, roles.nonPlayer] }],
       };
     }
     case 'update-trainer': {
@@ -299,26 +299,26 @@ async function applyChange(
         set.role = change.role;
         (change.role === 'non-playing' ? target.add : target.remove).push(roles.nonPlayer);
       }
-      if (change.leadership === 'manager') {
-        set.leadership = 'manager';
-        target.add.push(roles.gymManager);
-        // The current manager steps down.
+      if (change.leadership === 'vice-leader') {
+        set.leadership = 'vice-leader';
+        target.add.push(roles.gymViceLeader);
+        // The current vice-leader steps down.
         for (const { values: t } of league.trainers) {
-          if (t.gym_id === gym.gym_id && t.leadership === 'manager' && t.discord_id !== req.target) {
+          if (t.gym_id === gym.gym_id && t.leadership === 'vice-leader' && t.discord_id !== req.target) {
             others.push({ discordId: t.discord_id, set: { leadership: 'none' } });
-            otherRoles.push({ userId: t.discord_id, add: [], remove: [roles.gymManager] });
+            otherRoles.push({ userId: t.discord_id, add: [], remove: [roles.gymViceLeader] });
           }
         }
       } else if (change.leadership === 'leader') {
         set.leadership = 'leader';
         target.add.push(roles.gymLeader);
-        target.remove.push(roles.gymManager);
+        target.remove.push(roles.gymViceLeader);
         // The requester hands off; the outdated check confirmed they're still this gym's leader.
         others.push({ discordId: req.requester, set: { leadership: 'none' } });
         otherRoles.push({ userId: req.requester, add: [], remove: [roles.gymLeader] });
       } else if (change.leadership === 'none') {
         set.leadership = 'none';
-        target.remove.push(roles.gymManager);
+        target.remove.push(roles.gymViceLeader);
       }
       await writeTrainers(guildId, league, req, members, [{ discordId: req.target, set }, ...others]);
       return {
@@ -353,7 +353,7 @@ async function applyChange(
         roles: onGym.map((t) => ({
           userId: t.discord_id,
           add: [],
-          remove: [gym.name, roles.gymLeader, roles.gymManager, roles.nonPlayer],
+          remove: [gym.name, roles.gymLeader, roles.gymViceLeader, roles.nonPlayer],
         })),
         outdated,
       };

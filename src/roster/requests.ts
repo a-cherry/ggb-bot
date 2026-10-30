@@ -31,19 +31,19 @@ export function roleLabel(value: string): string {
     trainer: roles.participatingTrainer,
     'non-playing': roles.nonPlayer,
     leader: roles.gymLeader,
-    manager: roles.gymManager,
+    'vice-leader': roles.gymViceLeader,
   };
   return labels[value] ?? value;
 }
 
-// What an update-trainer makes the target, by Discord role name: "Gym Manager",
-// "Non-Player", "Non-Player and Gym Manager". A manager stepping down is named
+// What an update-trainer makes the target, by Discord role name: "Gym Vice-Leader",
+// "Non-Player", "Non-Player and Gym Vice-Leader". A vice-leader stepping down is named
 // by the role they keep: Participating Trainer, or Non-Player if non-playing.
 export function promotionLabel(req: RosterRequest): string {
   const change = parseChange(req.change);
   const labels = [
     ...(change.role ? [roleLabel(change.role)] : []),
-    ...(change.leadership === 'leader' || change.leadership === 'manager' ? [roleLabel(change.leadership)] : []),
+    ...(change.leadership === 'leader' || change.leadership === 'vice-leader' ? [roleLabel(change.leadership)] : []),
   ];
   return labels.length ? labels.join(' and ') : roleLabel(req.snapshot_role || 'trainer');
 }

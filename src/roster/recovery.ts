@@ -159,7 +159,7 @@ function roleChanges(league: League, history: History[]): RoleChange[] {
     };
     toggle(roles.nonPlayer, h.before_role === 'non-playing', h.after_role === 'non-playing');
     toggle(roles.gymLeader, h.before_leadership === 'leader', h.after_leadership === 'leader');
-    toggle(roles.gymManager, h.before_leadership === 'manager', h.after_leadership === 'manager');
+    toggle(roles.gymViceLeader, h.before_leadership === 'vice-leader', h.after_leadership === 'vice-leader');
     return change;
   });
 }

@@ -5,7 +5,7 @@ export interface LeagueConfig {
   roles: {
     participatingTrainer: string;
     gymLeader: string;
-    gymManager: string;
+    gymViceLeader: string;
     nonPlayer: string;
   };
   // Members with any of these Discord roles may approve or reject roster requests.

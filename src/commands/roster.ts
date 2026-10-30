@@ -1,4 +1,4 @@
-// /roster: roster requests from leaders and managers (Roster Spec: "Commands").
+// /roster: roster requests from leaders and vice-leaders (Roster Spec: "Commands").
 import { displayName, type Member } from '../discord.js';
 import type { CommandHandler, CommandInteraction } from '../interactions.js';
 import { isStaff } from '../roster/approval.js';
@@ -47,10 +47,10 @@ export const rosterCommand = {
         {
           type: 3,
           name: 'leadership',
-          description: 'Gym Leader hands off your leadership; Gym Manager appoints one; None removes the manager',
+          description: 'Gym Leader hands off your leadership; Gym Vice-Leader appoints one; None removes the vice-leader',
           choices: [
             { name: 'Gym Leader', value: 'leader' },
-            { name: 'Gym Manager', value: 'manager' },
+            { name: 'Gym Vice-Leader', value: 'vice-leader' },
             { name: 'None', value: 'none' },
           ],
         },
@@ -173,8 +173,8 @@ const cancelRequest: CommandHandler = async (interaction) => {
   const [requests] = await readTabs('rosterRequests');
   const found = requests.find((r) => r.values.target === targetId && r.values.status === 'pending');
   if (!found) return `${mention(targetId)} has no pending request.`;
-  // Either of the gym's leader and manager can cancel, whoever made it.
-  return cancel(requesterOf(interaction), found, ['leader', 'manager'], `${mention(targetId)}'s request`);
+  // Either of the gym's leader and vice-leader can cancel, whoever made it.
+  return cancel(requesterOf(interaction), found, ['leader', 'vice-leader'], `${mention(targetId)}'s request`);
 };
 
 const repostRequest: CommandHandler = async (interaction) => {

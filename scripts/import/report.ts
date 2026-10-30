@@ -6,7 +6,7 @@ import type { Classification, ImportedTrainer } from './classify.js';
 const TRAINERS_MIN = 8;
 const TRAINERS_MAX = 15;
 const LEADERS_REQUIRED = 1;
-const MANAGERS_MAX = 1;
+const VICE_LEADERS_MAX = 1;
 const NON_PLAYING_MAX = 3;
 
 export interface ReportOptions {
@@ -40,9 +40,9 @@ export function buildReport(c: Classification, opts: ReportOptions): string[] {
       const trainers = ts.filter((t) => t.role === 'trainer').length;
       const nonPlaying = ts.length - trainers;
       const leaders = ts.filter((t) => t.leadership === 'leader').length;
-      const managers = ts.filter((t) => t.leadership === 'manager').length;
+      const viceLeaders = ts.filter((t) => t.leadership === 'vice-leader').length;
       const leaderError = leaders !== LEADERS_REQUIRED ? ` [Needs ${LEADERS_REQUIRED}]` : '';
-      const managerError = managers > MANAGERS_MAX ? ` [Max ${MANAGERS_MAX}]` : '';
+      const viceLeaderError = viceLeaders > VICE_LEADERS_MAX ? ` [Max ${VICE_LEADERS_MAX}]` : '';
       const trainerError =
         trainers < TRAINERS_MIN || trainers > TRAINERS_MAX ? ` [Needs ${TRAINERS_MIN}-${TRAINERS_MAX}]` : '';
       const nonPlayingError = nonPlaying > NON_PLAYING_MAX ? ` [Max ${NON_PLAYING_MAX}]` : '';
@@ -50,7 +50,7 @@ export function buildReport(c: Classification, opts: ReportOptions): string[] {
         `**${gym}**: ` +
         [
           `${count(leaders, 'Leader')}${leaderError}`,
-          `${count(managers, 'Manager')}${managerError}`,
+          `${count(viceLeaders, 'Vice-Leader')}${viceLeaderError}`,
           `${count(trainers, 'Participating trainer')}${trainerError}`,
           `${count(nonPlaying, 'Non-Player')}${nonPlayingError}`,
         ].join(', ')
@@ -75,8 +75,8 @@ export function buildReport(c: Classification, opts: ReportOptions): string[] {
   lines.push(`Gym role without Participating Trainer (${c.gymRoleWithoutParticipating.length}):`);
   list(c.gymRoleWithoutParticipating.map((m) => `${mention(m)} (${m.gyms.join(', ')})`));
 
-  const both = c.trainers.filter((t) => t.bothLeaderAndManager);
-  section(`Both Gym Leader and Gym Manager (${both.length})`);
+  const both = c.trainers.filter((t) => t.bothLeaderAndViceLeader);
+  section(`Both Gym Leader and Gym Vice-Leader (${both.length})`);
   lines.push('Imported with leadership `none`.');
   list(both.map((t) => `${mention(t)} (${t.gym})`));
 

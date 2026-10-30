@@ -2,7 +2,7 @@
   "roles": {
     "participatingTrainer": "Participating Trainer",
     "gymLeader": "Gym Leader",
-    "gymManager": "Gym Manager",
+    "gymViceLeader": "Gym Vice-Leader",
     "nonPlayer": "Non-Player"
   },
   "alertRole": "Referee",

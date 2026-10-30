@@ -7,7 +7,7 @@ import { isGymRequest, roleLabel, type RequestType } from './requests.js';
 // A gym's fan role is its gym role's name plus this (Bot Spec: "Initial population").
 export const FAN_SUFFIX = ' Fan';
 
-export type Leadership = 'leader' | 'manager';
+export type Leadership = 'leader' | 'vice-leader';
 
 export const MAX_NON_PLAYING = 3;
 
@@ -21,7 +21,7 @@ export function checkRequester(league: League, discordId: string, allowed: Leade
   const trainer = findTrainer(league, discordId);
   // Not in the Trainers tab at all reads the same as holding no leadership.
   if (!trainer || !allowed.includes(trainer.leadership as Leadership)) {
-    const who = allowed.length === 1 ? `the gym's ${allowed[0]}` : "a gym's leader or manager";
+    const who = allowed.length === 1 ? `the gym's ${allowed[0]}` : "a gym's leader or vice-leader";
     return { refusal: `Only ${who} can make this request.` };
   }
   if (trainer.status !== 'active') {
@@ -37,13 +37,13 @@ export function checkRequester(league: League, discordId: string, allowed: Leade
   return { trainer, gym };
 }
 
-// Who may make a request. A remove of the manager, any leadership change, a
+// Who may make a request. A remove of the vice-leader, any leadership change, a
 // rebrand and a disband are the leader's alone.
 export function leadershipFor(type: RequestType, change: Record<string, string>, target: Trainer | undefined): Leadership[] {
   if (type === 'rebrand' || type === 'disband') return ['leader'];
-  if (type === 'remove' && target?.leadership === 'manager') return ['leader'];
+  if (type === 'remove' && target?.leadership === 'vice-leader') return ['leader'];
   if (type === 'update-trainer' && change.leadership) return ['leader'];
-  return ['leader', 'manager'];
+  return ['leader', 'vice-leader'];
 }
 
 export function checkTargetHasNoGym(league: League, targetId: string, gym: Gym): string | undefined {
@@ -51,7 +51,7 @@ export function checkTargetHasNoGym(league: League, targetId: string, gym: Gym):
   if (!target?.gym_id) return undefined;
   if (target.gym_id === gym.gym_id) return `${mention(targetId)} is already on ${gym.name}.`;
   const theirs = gymName(league, target.gym_id);
-  return `${mention(targetId)} is on ${theirs}. ${theirs}'s leader or manager must remove them first.`;
+  return `${mention(targetId)} is on ${theirs}. ${theirs}'s leader or vice-leader must remove them first.`;
 }
 
 export function checkTargetOnGym(league: League, targetId: string, gym: Gym): string | undefined {
@@ -127,14 +127,14 @@ export function checkUpdate(
     if (leader) return leader;
   }
   if (change.role === target.role) return `${mention(targetId)} is already ${roleLabel(target.role)}.`;
-  if (change.leadership === 'none' && target.leadership !== 'manager') {
-    return `${mention(targetId)} isn't ${gym.name}'s ${roleLabel('manager')}.`;
+  if (change.leadership === 'none' && target.leadership !== 'vice-leader') {
+    return `${mention(targetId)} isn't ${gym.name}'s ${roleLabel('vice-leader')}.`;
   }
   if (change.leadership && change.leadership === target.leadership) {
     return `${mention(targetId)} is already ${gym.name}'s ${roleLabel(target.leadership)}.`;
   }
   return (
-    (change.leadership === 'leader' || change.leadership === 'manager' ? checkTargetStatus(league, targetId) : undefined) ??
+    (change.leadership === 'leader' || change.leadership === 'vice-leader' ? checkTargetStatus(league, targetId) : undefined) ??
     (change.role === 'non-playing' ? checkNonPlaying(league, targetId, gym) : undefined) ??
     checkNoPendingRequest(league, targetId, exceptRequestId)
   );
