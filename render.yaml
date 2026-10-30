@@ -1,0 +1,46 @@
+# Render Blueprint for the bot. Values are set in the Render dashboard, never here.
+#
+# Exactly one instance may run (in-memory locks, startup recovery). The disk is
+# unused: attaching one turns off Render's zero-downtime deploys, so the old
+# process stops before the new one starts, at the cost of a few seconds of
+# downtime per deploy. Don't remove it or scale out.
+services:
+  - type: web
+    name: ggb-bot
+    runtime: node
+    plan: starter
+    numInstances: 1
+    # TypeScript is a dev dependency, so install those too for the build.
+    buildCommand: npm ci --include=dev && npm run build
+    # node directly, not npm start, so SIGTERM reaches the bot itself.
+    startCommand: node dist/server.js
+    # 503 until the header check and recovery have run, 200 after.
+    healthCheckPath: /health
+    # The bot drains for up to 50 seconds on SIGTERM (DRAIN_MS in src/server.ts).
+    # Render's default of 30 would kill it partway.
+    maxShutdownDelaySeconds: 60
+    disk:
+      name: single-instance
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: DISCORD_APPLICATION_ID
+        sync: false
+      - key: DISCORD_PUBLIC_KEY
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: DISCORD_STAFF_CHANNEL_ID
+        sync: false
+      - key: DISCORD_STAFF_ROLE_IDS
+        sync: false
+      - key: DISCORD_TRANSFER_ANNOUNCEMENTS_CHANNEL_ID
+        sync: false
+      - key: DISCORD_MATCH_RESULTS_ANNOUNCEMENTS_CHANNEL_ID
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_KEY_B64
+        sync: false
+      - key: GOOGLE_LEAGUE_DB_ID
+        sync: false

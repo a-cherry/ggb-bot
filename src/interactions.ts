@@ -18,6 +18,7 @@ const track = (work: Promise<void>) => {
 
 // Resolves once every interaction in progress has finished.
 export const drain = () => Promise.allSettled([...inFlight]);
+export const inFlightCount = () => inFlight.size;
 
 // The reply for a handler that threw. A sheet layout problem is also posted to
 // staff, since only they can fix it; a lock timeout says to retry; anything

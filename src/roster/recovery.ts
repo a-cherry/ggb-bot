@@ -17,9 +17,11 @@ import { closeApprovalCard, parseChange, type RosterRequest } from './requests.j
 type History = Row<'rosterHistory'>;
 
 // An approval claimed this recently may still be running in the process that
-// is stopping for a deploy, which drains for up to 50 seconds (see server.ts).
-// Startup leaves it until it's this old.
-const SETTLE_MS = 90_000;
+// is stopping for a deploy. Render's disk keeps deploys from overlapping, but
+// if they ever do, the old process lives up to 60 seconds after the new one
+// takes traffic plus up to 60 of shutdown (render.yaml). Startup leaves it
+// until it's this old.
+const SETTLE_MS = 150_000;
 
 export async function recoverApprovals(guildId: string): Promise<void> {
   const league = await loadLeague();
