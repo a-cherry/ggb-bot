@@ -16,9 +16,9 @@ services:
     startCommand: node dist/server.js
     # 503 until the header check and recovery have run, 200 after.
     healthCheckPath: /health
-    # The bot drains for up to 50 seconds on SIGTERM (DRAIN_MS in src/server.ts).
-    # Render's default of 30 would kill it partway.
-    maxShutdownDelaySeconds: 60
+    # No maxShutdownDelaySeconds: Render refuses it on a service with a disk and
+    # kills 30 seconds after SIGTERM. The bot's drain (DRAIN_MS in src/server.ts)
+    # stops before that.
     disk:
       name: single-instance
       mountPath: /var/data

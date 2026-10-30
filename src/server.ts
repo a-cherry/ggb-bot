@@ -105,9 +105,11 @@ app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyK
 const server = app.listen(PORT, () => console.log(`listening on ${PORT}`));
 
 // The longest a shutdown waits for interactions in progress. The host must
-// wait longer before killing the process: Render's maxShutdownDelaySeconds
-// (render.yaml) or Railway's RAILWAY_DEPLOYMENT_DRAINING_SECONDS.
-const DRAIN_MS = 50_000;
+// wait longer before killing the process: Render kills 30 seconds after
+// SIGTERM on a service with a disk, and that can't be changed; on Railway, set
+// RAILWAY_DEPLOYMENT_DRAINING_SECONDS. An approval still running when this
+// runs out is finished by startup recovery.
+const DRAIN_MS = 25_000;
 
 // On a deploy or Ctrl+C: stop taking interactions, let the ones in progress
 // finish, so an approval isn't cut off after it's marked approved, then exit.
