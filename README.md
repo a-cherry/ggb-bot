@@ -86,7 +86,7 @@ Each deploy has a few seconds of downtime between the old process stopping and t
 
 **Environment variables.** Every variable in the Setup table, set in the service's Environment tab; `render.yaml` lists them by name with `sync: false` and never holds values. Render sets `PORT` itself. Never set `GGB_CRASH_AT` or `GGB_FAIL_AT` on Render.
 
-**Discord.** After the first deploy is live, stop any local bot that uses the same League DB, then set the app's Interactions Endpoint URL (Developer Portal > General Information) to `https://<service>.onrender.com/interactions` and save. Discord sends a PING first, so a save that succeeds means the bot answered. Run `npm run register` from your machine, with `.env` pointing at the same app and server, whenever the command definitions change; the hosted bot doesn't register commands itself.
+**Discord.** After the first deploy is live, stop any local bot that uses the same League DB, then set the app's Interactions Endpoint URL (Developer Portal > General Information) to `https://<service>.onrender.com/interactions` and save. Discord sends a PING first, so a save that succeeds means the bot answered. The hosted bot doesn't register commands itself. After any change to the command definitions ships to production, wait for the deploy to go live, then run `npm run register -- --env .env.production` from your machine. Registering first would show Trainers commands the running bot can't handle yet.
 
 **Logs.** On a deploy, expect the old process's `SIGTERM: N interaction(s) in progress` and `interactions finished after Ns` (or the 25-second timeout line) before the new one's `listening on 10000` and `startup finished; taking interactions`.
 
