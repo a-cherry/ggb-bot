@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import './load-env.js';
 import { commandDefinitions } from '../src/commands/index.js';
 
 const appId = process.env.DISCORD_APPLICATION_ID;

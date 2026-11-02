@@ -1,8 +1,7 @@
 // Builds every League DB tab in an existing workbook (GOOGLE_LEAGUE_DB_ID).
 // Safe to re-run: a tab with the right header is left alone, a missing tab is
 // added, and any header mismatch stops the run before anything is written.
-import dotenv from 'dotenv';
-dotenv.config();
+import './load-env.js';
 import type { sheets_v4 } from 'googleapis';
 import { getSheets } from '../src/google.js';
 import { checkTabs, getLeagueDbId, getTabIds, isTabEmpty } from '../src/league-db.js';

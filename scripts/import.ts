@@ -2,8 +2,8 @@
 //   npm run import -- --season 5 --dry-run           reads Discord, writes nothing, posts the report
 //   npm run import -- --season 5 --commit            writes Gyms, Trainers and Roster history
 //   npm run import -- --season 5 --commit --force    resets those tabs and imports again
-import dotenv from 'dotenv';
-dotenv.config();
+// Add --env <path> to run against another env file, e.g. .env.production.
+import './load-env.js';
 import { parseArgs } from 'node:util';
 import { getLeagueConfig } from '../src/config.js';
 import { listMembers, listRoles, MESSAGE_LIMIT, postMessage } from '../src/discord.js';
@@ -24,6 +24,7 @@ const { values: args } = parseArgs({
     'dry-run': { type: 'boolean', default: false },
     commit: { type: 'boolean', default: false },
     force: { type: 'boolean', default: false },
+    env: { type: 'string' }, // read by load-env
   },
 });
 
