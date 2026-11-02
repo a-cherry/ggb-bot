@@ -8,6 +8,8 @@ services:
   - type: web
     name: ggb-bot
     runtime: node
+    # Deploys come from production, not main. Ship with: git push origin main:production
+    branch: production
     plan: starter
     numInstances: 1
     # TypeScript is a dev dependency, so install those too for the build.
