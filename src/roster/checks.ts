@@ -2,7 +2,7 @@
 // or undefined when the check passes. Approval runs the same checks again.
 import { formatDate, isInSeason } from '../seasons.js';
 import { findGym, findTrainer, gymName, mention, seasonMoves, type Gym, type League, type Trainer } from './league.js';
-import { isGymRequest, roleLabel, type RequestType } from './requests.js';
+import { isGymRequest, playerOrCoach, roleLabel, type RequestType } from './requests.js';
 
 // A gym's fan role is its gym role's name plus this (Bot Spec: "Initial population").
 export const FAN_SUFFIX = ' Fan';
@@ -126,7 +126,7 @@ export function checkUpdate(
     const leader = checkTargetNotLeader(league, targetId, gym);
     if (leader) return leader;
   }
-  if (change.role === target.role) return `${mention(targetId)} is already ${roleLabel(target.role)}.`;
+  if (change.role === target.role) return `${mention(targetId)} is already a ${playerOrCoach(target.role)}.`;
   if (change.leadership === 'none' && target.leadership !== 'vice-leader') {
     return `${mention(targetId)} isn't ${gym.name}'s ${roleLabel('vice-leader')}.`;
   }

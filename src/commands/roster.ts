@@ -4,7 +4,7 @@ import type { CommandHandler, CommandInteraction } from '../interactions.js';
 import { isStaff } from '../roster/approval.js';
 import { checkAdd, checkRemove, checkUpdate, removeWarnings } from '../roster/checks.js';
 import { findTrainer, mention, type League, type Trainer } from '../roster/league.js';
-import { roleLabel } from '../roster/requests.js';
+import { leadershipTitle, playerOrCoach } from '../roster/requests.js';
 import { cancel, repostCard, submit, type Requester } from '../roster/submit.js';
 import { readTabs } from '../sheet-rows.js';
 
@@ -14,9 +14,9 @@ const roleOption = (description: string) => ({
   name: 'role',
   description,
   choices: [
-    // Shown by their Discord role names; the League DB keeps trainer and non-playing.
-    { name: 'Participating Trainer', value: 'trainer' },
-    { name: 'Non-Player', value: 'non-playing' },
+    // The League DB keeps trainer and non-playing.
+    { name: 'Player', value: 'trainer' },
+    { name: 'Coach', value: 'non-playing' },
   ],
 });
 
@@ -29,7 +29,7 @@ export const rosterCommand = {
       type: 1,
       name: 'add',
       description: 'Request to add a trainer with no gym to your gym',
-      options: [trainerOption('The member to add'), roleOption('Participating Trainer (default) or Non-Player')],
+      options: [trainerOption('The member to add'), roleOption('Player (default) or Coach')],
     },
     {
       type: 1,
@@ -43,7 +43,7 @@ export const rosterCommand = {
       description: "Request to change a trainer's role or leadership on your gym",
       options: [
         trainerOption('The trainer to change'),
-        roleOption('The new role'),
+        roleOption('Player or Coach'),
         {
           type: 3,
           name: 'leadership',
@@ -162,7 +162,7 @@ function updateChange(
   if (role && role !== target.role) change.role = role;
   if (leadership && leadership !== target.leadership) change.leadership = leadership;
   if (Object.keys(change).length) return change;
-  const labels = [roleLabel(target.role), ...(target.leadership !== 'none' ? [roleLabel(target.leadership)] : [])];
+  const labels = [playerOrCoach(target.role), ...(target.leadership !== 'none' ? [leadershipTitle(target.leadership)] : [])];
   return `${mention(targetId)} is already ${labels.join(' and ')}, so there's nothing to request.`;
 }
 

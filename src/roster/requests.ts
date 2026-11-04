@@ -38,7 +38,7 @@ export function roleLabel(value: string): string {
 
 // Positions as requests and announcements name them, rather than by Discord role name.
 export const leadershipTitle = (leadership: string): string | undefined =>
-  ({ leader: 'Gym Leader', 'vice-leader': 'Vice Gym Leader' } as Record<string, string>)[leadership];
+  ({ leader: 'Gym Leader', 'vice-leader': 'Gym Vice-Leader' } as Record<string, string>)[leadership];
 export const playerOrCoach = (role: string) => (role === 'non-playing' ? 'coach' : 'player');
 
 // An update-trainer's parts: the leadership it appoints, if any, and the role
@@ -54,8 +54,8 @@ function trainerUpdate(req: RosterRequest) {
   };
 }
 
-// The update for the trainer-facing post and replies: "appoint @X as Vice Gym
-// Leader", "move @X from player to coach", or both.
+// The update for the trainer-facing post and replies: "appoint @X as Gym
+// Vice-Leader", "move @X from player to coach", or both.
 function describeUpdate(req: RosterRequest): string {
   const { appoint, from, to, stepDown } = trainerUpdate(req);
   const target = mention(req.target);
@@ -65,7 +65,7 @@ function describeUpdate(req: RosterRequest): string {
 }
 
 // The update for the staff card, which names the trainer on its own line:
-// "move from player to coach", "appoint to Vice Gym Leader".
+// "move from player to coach", "appoint to Gym Vice-Leader".
 function cardUpdate(req: RosterRequest): string {
   const { appoint, from, to, stepDown } = trainerUpdate(req);
   const move = to && `move from ${stepDown ?? from} to ${to}`;
@@ -78,7 +78,7 @@ export function describeChange(req: RosterRequest, gym: string): string {
   const change = parseChange(req.change);
   switch (req.type as RequestType) {
     case 'add':
-      return `add ${mention(req.target)} to ${gym} as ${roleLabel(change.role)}`;
+      return `add ${mention(req.target)} to ${gym} as ${playerOrCoach(change.role)}`;
     case 'remove':
       return `remove ${mention(req.target)} from ${gym}`;
     case 'update-trainer':
@@ -143,9 +143,9 @@ export const approvalButtons = (requestId: string, disabled = false): ActionRow[
 export function cardText(req: RosterRequest, gym: string, targetName: string | undefined, warnings: string[]): string {
   return [
     `**Roster request ${req.request_id}**`,
+    `Gym: ${gym}`,
     `Requester: ${mention(req.requester)}`,
     ...(targetName === undefined ? [] : [`Trainer: ${mention(req.target)} (${targetName})`]),
-    `Gym: ${gym}`,
     `Change: ${req.type === 'update-trainer' ? cardUpdate(req) : describeChange(req, gym)}`,
     ...warnings.map((w) => `Warning: ${w}`),
   ].join('\n');
