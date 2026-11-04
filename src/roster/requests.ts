@@ -64,15 +64,33 @@ function describeUpdate(req: RosterRequest): string {
   return `move ${target} ${move}`;
 }
 
-// The update for the staff card, which names the trainer on its own line:
-// "move from player to coach", "appoint to Gym Vice-Leader".
+// An update-trainer for the staff card: "move from player to coach", "appoint to Gym Vice-Leader".
 function cardUpdate(req: RosterRequest): string {
   const { appoint, from, to, stepDown } = trainerUpdate(req);
   const move = to && `move from ${stepDown ?? from} to ${to}`;
   return [...(appoint ? [`appoint to ${appoint}`] : []), ...(move ? [move] : [])].join(' and ');
 }
 
-// The change in one line, for the card and the replies. `gym` is how to show the
+// The change for the staff card, which names the gym and trainer on their own lines.
+function cardChange(req: RosterRequest): string {
+  const change = parseChange(req.change);
+  switch (req.type as RequestType) {
+    case 'add':
+      return `add as ${playerOrCoach(change.role)}`;
+    case 'remove':
+      return 'remove from gym';
+    case 'update-trainer':
+      return cardUpdate(req);
+    case 'rebrand':
+      return `rebrand to ${change.emote} **${escapeMarkdown(change.name)}** (${escapeMarkdown(change.abbreviation)})`;
+    case 'disband':
+      return 'disband';
+    default:
+      return `${req.type} ${req.change}`;
+  }
+}
+
+// The change in one line, for the post and the replies. `gym` is how to show the
 // request's gym, usually its role mention (see gymMention).
 export function describeChange(req: RosterRequest, gym: string): string {
   const change = parseChange(req.change);
@@ -146,7 +164,7 @@ export function cardText(req: RosterRequest, gym: string, targetName: string | u
     `Gym: ${gym}`,
     `Requester: ${mention(req.requester)}`,
     ...(targetName === undefined ? [] : [`Trainer: ${mention(req.target)} (${targetName})`]),
-    `Change: ${req.type === 'update-trainer' ? cardUpdate(req) : describeChange(req, gym)}`,
+    `Change: ${cardChange(req)}`,
     ...warnings.map((w) => `Warning: ${w}`),
   ].join('\n');
 }
