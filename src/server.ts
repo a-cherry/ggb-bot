@@ -88,7 +88,7 @@ app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyK
     interaction.type === InteractionType.MESSAGE_COMPONENT &&
     /^(approve|reject):/.test(interaction.data.custom_id)
   ) {
-    runDeferredUpdate(res, interaction, handleDecision);
+    runDeferredUpdate(res, interaction, handleDecision, '⏳ Processing…');
     return;
   }
 

@@ -117,7 +117,7 @@ export interface ComponentInteraction {
   guild_id: string;
   member: Member;
   data: { custom_id: string };
-  message: { id: string; content: string };
+  message: { id: string; content: string; components?: ActionRow[] };
 }
 
 // `message` replaces the text of the message the button is on, with
@@ -132,9 +132,21 @@ export interface ComponentResult {
 
 export type ComponentHandler = (interaction: ComponentInteraction) => Promise<ComponentResult>;
 
-export function runDeferredUpdate(res: Response, interaction: ComponentInteraction, handler: ComponentHandler): void {
-  // Acknowledges without changing the message yet; nothing shows as "thinking".
-  res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+// With `pending`, the message's buttons are swapped for that line at once, so
+// the press shows and can't be repeated; a result that leaves the message
+// unchanged puts the buttons back.
+export function runDeferredUpdate(
+  res: Response, interaction: ComponentInteraction, handler: ComponentHandler, pending?: string,
+): void {
+  if (pending) {
+    res.send({
+      type: InteractionResponseType.UPDATE_MESSAGE,
+      data: { content: `${interaction.message.content}\n${pending}`, components: [], allowed_mentions: { parse: [] } },
+    });
+  } else {
+    // Acknowledges without changing the message yet; nothing shows as "thinking".
+    res.send({ type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE });
+  }
 
   track((async () => {
     let result: ComponentResult;
@@ -147,6 +159,9 @@ export function runDeferredUpdate(res: Response, interaction: ComponentInteracti
     try {
       if (result.message !== undefined) {
         await editOriginalResponse(interaction.application_id, interaction.token, result.message, result.components ?? []);
+      } else if (pending) {
+        const { content, components } = interaction.message;
+        await editOriginalResponse(interaction.application_id, interaction.token, content, components);
       }
       if (result.reply) await postFollowup(interaction.application_id, interaction.token, result.reply, true);
       if (result.publicMessage) await postFollowup(interaction.application_id, interaction.token, result.publicMessage);
