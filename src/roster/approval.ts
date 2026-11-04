@@ -11,7 +11,7 @@ import {
 import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
 import { findGym, gymName, loadLeague, mention, requestInfo, type Gym, type League, type Trainer } from './league.js';
 import {
-  closeApprovalCards, formatChange, isGymRequest, parseChange, promotionLabel, type RequestType, type RosterRequest,
+  closeApprovalCards, formatChange, isGymRequest, parseChange, type RequestType, type RosterRequest,
 } from './requests.js';
 import { recoverRequest } from './recovery.js';
 
@@ -45,8 +45,8 @@ const withOutcome = (card: string, outcome: string) => `${card}\n${outcome}`;
 
 export function outcomeLine(req: RosterRequest): string {
   switch (req.status) {
-    case 'approved': return '**Approved**';
-    case 'rejected': return '**Rejected**';
+    case 'approved': return `**Approved** by ${mention(req.decided_by)}`;
+    case 'rejected': return `**Rejected** by ${mention(req.decided_by)}`;
     case 'cancelled': return '**Cancelled**';
     default: return `**Refused**: ${req.refusal_message}`;
   }
@@ -392,12 +392,26 @@ export async function announcementFor(guildId: string, req: RosterRequest, gym: 
     case 'remove':
       return `${gymLine} has removed ${mention(req.target)} from their roster`;
     case 'update-trainer':
-      return `${gymLine} has promoted ${mention(req.target)} to ${promotionLabel(req)}`;
+      return `${gymLine} ${updateTrainerLine(req)}`;
     case 'rebrand':
       return `${gymLine} has rebranded to ${change.emote} **${escapeMarkdown(change.name)}**`;
     case 'disband':
       return `${gymLine} has disbanded`;
   }
+}
+
+// What an update-trainer did to the target, for the announcement: appointed to a
+// leadership, moved between player and coach, or stepped down from leadership to
+// the role they keep. A leadership and role change together name both.
+function updateTrainerLine(req: RosterRequest): string {
+  const change = parseChange(req.change);
+  const target = mention(req.target);
+  const leadership = ({ leader: 'Gym Leader', 'vice-leader': 'Vice Gym Leader' } as Record<string, string>)[change.leadership];
+  const role = (r: string) => (r === 'non-playing' ? 'coach' : 'player');
+  const moved = change.role ? `from ${role(req.snapshot_role || 'trainer')} to ${role(change.role)}` : undefined;
+  if (leadership) return `has appointed ${target} as ${leadership}${moved ? ` and moved them ${moved}` : ''}`;
+  if (change.leadership === 'none') return `has moved ${target} to ${role(change.role ?? req.snapshot_role)}`;
+  return `has moved ${target} ${moved}`;
 }
 
 export async function updateGym(league: League, gym: Gym): Promise<void> {
