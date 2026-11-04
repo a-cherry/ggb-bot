@@ -6,7 +6,7 @@
 import './load-env.js';
 import { parseArgs } from 'node:util';
 import { getLeagueConfig } from '../src/config.js';
-import { listMembers, listRoles, MESSAGE_LIMIT, postMessage } from '../src/discord.js';
+import { listMembers, listRoles, MESSAGE_LIMIT, postSilentMessage } from '../src/discord.js';
 import { checkTabs, countRows, getLeagueDbId } from '../src/league-db.js';
 import { TABS } from '../src/schema.js';
 import { classify, missingMarkerRoles } from './import/classify.js';
@@ -82,7 +82,7 @@ if (!staffChannelId) {
   console.warn('\nDISCORD_STAFF_CHANNEL_ID is not set; report not posted.');
 } else {
   const discord = buildReport(result, { title, memberCount, committed, mention: (m) => `<@${m.discordId}>` });
-  for (const message of splitMessages(discord, MESSAGE_LIMIT)) await postMessage(staffChannelId, message);
+  for (const message of splitMessages(discord, MESSAGE_LIMIT)) await postSilentMessage(staffChannelId, message);
   console.log('\nReport posted to the staff channel.');
 }
 

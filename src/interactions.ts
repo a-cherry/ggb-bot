@@ -141,7 +141,7 @@ export function runDeferredUpdate(
   if (pending) {
     res.send({
       type: InteractionResponseType.UPDATE_MESSAGE,
-      data: { content: `${interaction.message.content}\n${pending}`, components: [], allowed_mentions: { parse: [] } },
+      data: { content: `${interaction.message.content}\n${pending}`, components: [], allowed_mentions: { parse: ['users'] } },
     });
   } else {
     // Acknowledges without changing the message yet; nothing shows as "thinking".

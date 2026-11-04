@@ -163,7 +163,7 @@ export function cardText(req: RosterRequest, gym: string, targetName: string | u
     `**Roster request ${req.request_id}**`,
     `Gym: ${gym}`,
     `Requester: ${mention(req.requester)}`,
-    ...(targetName === undefined ? [] : [`Trainer: ${mention(req.target)} (${targetName})`]),
+    ...(targetName === undefined ? [] : [`Trainer: ${mention(req.target)} (${escapeMarkdown(targetName)})`]),
     `Change: ${cardChange(req)}`,
     ...warnings.map((w) => `Warning: ${w}`),
   ].join('\n');
