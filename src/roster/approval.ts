@@ -11,7 +11,7 @@ import {
 import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
 import { findGym, gymName, loadLeague, mention, requestInfo, type Gym, type League, type Trainer } from './league.js';
 import {
-  closeApprovalCards, describeUpdate, formatChange, isGymRequest, parseChange, type RequestType, type RosterRequest,
+  closeApprovalCards, describeUpdate, formatChange, isGymRequest, leadershipTitle, parseChange, playerOrCoach, type RequestType, type RosterRequest,
 } from './requests.js';
 import { recoverRequest } from './recovery.js';
 
@@ -206,9 +206,9 @@ function outdatedReason(league: League, req: RosterRequest): string | undefined 
     : NO_ROW;
   const plain = (v: string) => v;
   const fields: [string, string, string, (v: string) => string][] = [
-    ['gym', then.gym_id, now.gym_id, (id) => (id ? gymName(league, id) : 'none')],
-    ['role', then.role, now.role, plain],
-    ['leadership', then.leadership, now.leadership, plain],
+    ['gym', then.gym_id, now.gym_id, (id) => (id ? escapeMarkdown(gymName(league, id)) : 'none')],
+    ['role', then.role, now.role, playerOrCoach],
+    ['leadership', then.leadership, now.leadership, (v) => leadershipTitle(v) ?? v],
     ['status', then.status, now.status, plain],
   ];
   const changed = (isGymRequest(req.type) ? [] : fields)
@@ -219,7 +219,7 @@ function outdatedReason(league: League, req: RosterRequest): string | undefined 
   const allowed = leadershipFor(req.type as RequestType, parseChange(req.change), row);
   const requester = checkRequester(league, req.requester, allowed);
   if ('refusal' in requester || requester.gym.gym_id !== req.gym_id) {
-    return `${mention(req.requester)} can no longer make this request for ${gymName(league, req.gym_id)}.`;
+    return `${mention(req.requester)} can no longer make this request for ${escapeMarkdown(gymName(league, req.gym_id))}.`;
   }
   return undefined;
 }
@@ -375,7 +375,7 @@ export async function closeGym(league: League, req: RosterRequest, gym: Gym): Pr
         status: 'outdated',
         decided_by: req.decided_by,
         decided_at: req.decided_at,
-        refusal_message: `${gym.name} was disbanded (${req.request_id}).`,
+        refusal_message: `${escapeMarkdown(gym.name)} was disbanded (${req.request_id}).`,
       },
     }));
   await updateRows('rosterRequests', outdated);

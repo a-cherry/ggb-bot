@@ -71,7 +71,7 @@ const rebrand: CommandHandler = async (interaction) => {
     change: () => ({ name, abbreviation, emote: emote.display }),
     check: (league, gym, change) => {
       if (gym.name === name && gym.abbreviation.toUpperCase() === abbreviation && gym.emote === emote.sheet) {
-        return `${gym.name} already has that name, abbreviation and emote, so there's nothing to request.`;
+        return `${escapeMarkdown(gym.name)} already has that name, abbreviation and emote, so there's nothing to request.`;
       }
       return checkRebrand(league, gym, change, roleNames);
     },
@@ -149,6 +149,6 @@ const cancelRequest: CommandHandler = async (interaction) => {
   const found = league.requests.find(
     (r) => r.values.gym_id === checked.gym.gym_id && isGymRequest(r.values.type) && r.values.status === 'pending',
   );
-  if (!found) return `${checked.gym.name} has no pending rebrand or disband request.`;
-  return cancel(requester, found, ['leader'], `${checked.gym.name}'s ${found.values.type} request`);
+  if (!found) return `${escapeMarkdown(checked.gym.name)} has no pending rebrand or disband request.`;
+  return cancel(requester, found, ['leader'], `${escapeMarkdown(checked.gym.name)}'s ${found.values.type} request`);
 };

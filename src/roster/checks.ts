@@ -1,5 +1,6 @@
 // Request-time checks (Roster Spec: "Checks"). Each returns the refusal message,
 // or undefined when the check passes. Approval runs the same checks again.
+import { escapeMarkdown } from '../discord.js';
 import { formatDate, isInSeason } from '../seasons.js';
 import { findGym, findTrainer, gymName, mention, seasonMoves, type Gym, type League, type Trainer } from './league.js';
 import { isGymRequest, leadershipTitle, type RequestType } from './requests.js';
@@ -32,7 +33,7 @@ export function checkRequester(league: League, discordId: string, allowed: Leade
     return { refusal: "The League DB doesn't list you on a gym, so you can't make roster requests." };
   }
   if (gym.status !== 'active') {
-    return { refusal: `${gym.name} is ${gym.status}, so it can't make roster requests.` };
+    return { refusal: `${escapeMarkdown(gym.name)} is ${gym.status}, so it can't make roster requests.` };
   }
   return { trainer, gym };
 }
@@ -49,22 +50,22 @@ export function leadershipFor(type: RequestType, change: Record<string, string>,
 export function checkTargetHasNoGym(league: League, targetId: string, gym: Gym): string | undefined {
   const target = findTrainer(league, targetId);
   if (!target?.gym_id) return undefined;
-  if (target.gym_id === gym.gym_id) return `${mention(targetId)} is already on ${gym.name}.`;
-  const theirs = gymName(league, target.gym_id);
+  if (target.gym_id === gym.gym_id) return `${mention(targetId)} is already on ${escapeMarkdown(gym.name)}.`;
+  const theirs = escapeMarkdown(gymName(league, target.gym_id));
   return `${mention(targetId)} is on ${theirs}. ${theirs}'s leader or vice-leader must remove them first.`;
 }
 
 export function checkTargetOnGym(league: League, targetId: string, gym: Gym): string | undefined {
   const theirs = findTrainer(league, targetId)?.gym_id;
   if (theirs === gym.gym_id) return undefined;
-  if (!theirs) return `${mention(targetId)} isn't on ${gym.name}.`;
-  return `${mention(targetId)} is on ${gymName(league, theirs)}, not ${gym.name}.`;
+  if (!theirs) return `${mention(targetId)} isn't on ${escapeMarkdown(gym.name)}.`;
+  return `${mention(targetId)} is on ${escapeMarkdown(gymName(league, theirs))}, not ${escapeMarkdown(gym.name)}.`;
 }
 
 // The leader can't be removed or step down; they hand leadership to someone else first.
 export function checkTargetNotLeader(league: League, targetId: string, gym: Gym): string | undefined {
   if (findTrainer(league, targetId)?.leadership !== 'leader') return undefined;
-  return `${mention(targetId)} is ${gym.name}'s ${leadershipTitle('leader')}. They must hand leadership to someone else first, with /roster update-trainer leadership:leader.`;
+  return `${mention(targetId)} is ${escapeMarkdown(gym.name)}'s ${leadershipTitle('leader')}. They must hand leadership to someone else first, with /roster update-trainer leadership:leader.`;
 }
 
 export function checkTargetStatus(league: League, targetId: string): string | undefined {
@@ -80,10 +81,10 @@ export function checkSeasonMoves(league: League, targetId: string, gym: Gym): st
   const moves = seasonMoves(league, targetId, season.start);
   const leftOn = moves.left.get(gym.gym_id);
   if (leftOn) {
-    return `${mention(targetId)} left ${gym.name} on ${formatDate(leftOn)}, so they can't rejoin it until season ${season.season} ends.`;
+    return `${mention(targetId)} left ${escapeMarkdown(gym.name)} on ${formatDate(leftOn)}, so they can't rejoin it until season ${season.season} ends.`;
   }
   if (moves.gyms.length > 1) {
-    const names = moves.gyms.map((id) => gymName(league, id)).join(', ');
+    const names = moves.gyms.map((id) => escapeMarkdown(gymName(league, id))).join(', ');
     return `${mention(targetId)} has already switched gyms in season ${season.season} (${names}).`;
   }
   return undefined;
@@ -96,7 +97,7 @@ export function checkNonPlaying(league: League, targetId: string, gym: Gym): str
     .filter((t) => t.gym_id === gym.gym_id && t.role === 'non-playing' && t.discord_id !== targetId);
   if (current.length < MAX_NON_PLAYING) return undefined;
   const names = current.map((t) => mention(t.discord_id)).join(', ');
-  return `${gym.name} already has ${MAX_NON_PLAYING} non-playing trainers (${names}), the most allowed.`;
+  return `${escapeMarkdown(gym.name)} already has ${MAX_NON_PLAYING} coaches (${names}), the most allowed.`;
 }
 
 export function checkNoPendingRequest(league: League, targetId: string, exceptRequestId?: string): string | undefined {
@@ -104,7 +105,7 @@ export function checkNoPendingRequest(league: League, targetId: string, exceptRe
     .map((r) => r.values)
     .find((r) => r.target === targetId && r.status === 'pending' && r.request_id !== exceptRequestId);
   if (!pending) return undefined;
-  return `${mention(targetId)} already has a pending request, ${pending.request_id} (${pending.type} for ${gymName(league, pending.gym_id)}). Staff must decide it, or its requester can cancel it, first.`;
+  return `${mention(targetId)} already has a pending request, ${pending.request_id} (${pending.type} for ${escapeMarkdown(gymName(league, pending.gym_id))}). Staff must decide it, or its requester can cancel it, first.`;
 }
 
 export function checkRemove(league: League, targetId: string, gym: Gym, exceptRequestId?: string): string | undefined {
@@ -127,10 +128,10 @@ export function checkUpdate(
     if (leader) return leader;
   }
   if (change.leadership === 'none' && target.leadership !== 'vice-leader') {
-    return `${mention(targetId)} isn't ${gym.name}'s ${leadershipTitle('vice-leader')}.`;
+    return `${mention(targetId)} isn't ${escapeMarkdown(gym.name)}'s ${leadershipTitle('vice-leader')}.`;
   }
   if (change.leadership && change.leadership === target.leadership) {
-    return `${mention(targetId)} is already ${gym.name}'s ${leadershipTitle(target.leadership)}.`;
+    return `${mention(targetId)} is already ${escapeMarkdown(gym.name)}'s ${leadershipTitle(target.leadership)}.`;
   }
   return (
     (change.leadership === 'leader' || change.leadership === 'vice-leader' ? checkTargetStatus(league, targetId) : undefined) ??
@@ -148,7 +149,7 @@ export function removeWarnings(league: League, targetId: string, gym: Gym): stri
   ).length;
   if (left >= MIN_TRAINERS) return [];
   const trainers = left === 1 ? 'participating trainer' : 'participating trainers';
-  return [`${gym.name} would have ${left} ${trainers}, under the ${MIN_TRAINERS} needed in season.`];
+  return [`${escapeMarkdown(gym.name)} would have ${left} ${trainers}, under the ${MIN_TRAINERS} needed in season.`];
 }
 
 export function checkAdd(league: League, targetId: string, gym: Gym, role: string, exceptRequestId?: string): string | undefined {
@@ -172,7 +173,7 @@ export function checkNoPendingGymRequest(league: League, gym: Gym, exceptRequest
     .map((r) => r.values)
     .find((r) => r.gym_id === gym.gym_id && isGymRequest(r.type) && r.status === 'pending' && r.request_id !== exceptRequestId);
   if (!pending) return undefined;
-  return `${gym.name} already has a pending ${pending.type} request, ${pending.request_id}. Staff must decide it, or you can cancel it with /gym cancel-request, first.`;
+  return `${escapeMarkdown(gym.name)} already has a pending ${pending.type} request, ${pending.request_id}. Staff must decide it, or you can cancel it with /gym cancel-request, first.`;
 }
 
 const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
@@ -188,10 +189,10 @@ export function checkRebrand(
   for (const { values: other } of league.gyms) {
     if (other.gym_id === gym.gym_id) continue;
     if ((other.status === 'active' || other.status === 'relegated') && same(other.name, change.name)) {
-      return `The name ${other.name} is already taken by another gym.`;
+      return `The name ${escapeMarkdown(other.name)} is already taken by another gym.`;
     }
     if (other.status === 'active' && other.abbreviation && same(other.abbreviation, change.abbreviation)) {
-      return `The abbreviation ${other.abbreviation} is taken by ${other.name}.`;
+      return `The abbreviation ${escapeMarkdown(other.abbreviation)} is taken by ${escapeMarkdown(other.name)}.`;
     }
   }
   const own = [gym.name, `${gym.name}${FAN_SUFFIX}`];

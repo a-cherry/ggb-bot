@@ -1,5 +1,5 @@
 // Making and cancelling roster requests, shared by /roster and /gym (Roster Spec: "Making a request").
-import { displayName, getMember } from '../discord.js';
+import { displayName, escapeMarkdown, getMember } from '../discord.js';
 import type { CommandResult } from '../interactions.js';
 import { withLock } from '../locks.js';
 import { appendRows, updateRows, type SheetRow } from '../sheet-rows.js';
@@ -51,7 +51,7 @@ export async function submit(requester: Requester, s: Submission): Promise<strin
   if (typeof result === 'string') return result;
 
   const { req, warnings, target } = result;
-  let gym = result.gymName; // the plain name, if the role lookup fails
+  let gym = escapeMarkdown(result.gymName); // the plain name, if the role lookup fails
   try {
     gym = await gymMention(requester.guildId, result.gymName);
     crashPoint('card');
@@ -123,7 +123,7 @@ export async function cancel(
     if ('refusal' in checked) return checked.refusal;
     if (checked.gym.gym_id !== row.values.gym_id) {
       const who = allowed.length === 1 ? `its ${allowed[0]}` : 'its leader or vice-leader';
-      return `${what} ${requestId} is for ${gymName(league, row.values.gym_id)}, so only ${who} can cancel it.`;
+      return `${what} ${requestId} is for ${escapeMarkdown(gymName(league, row.values.gym_id))}, so only ${who} can cancel it.`;
     }
     const req = {
       ...row.values,

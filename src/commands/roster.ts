@@ -162,7 +162,7 @@ function updateChange(
   if (role && role !== target.role) change.role = role;
   if (leadership && leadership !== target.leadership) change.leadership = leadership;
   if (Object.keys(change).length) return change;
-  const labels = [playerOrCoach(target.role), ...(target.leadership !== 'none' ? [leadershipTitle(target.leadership)] : [])];
+  const labels = [`a ${playerOrCoach(target.role)}`, ...(target.leadership !== 'none' ? [leadershipTitle(target.leadership)] : [])];
   return `${mention(targetId)} is already ${labels.join(' and ')}, so there's nothing to request.`;
 }
 
