@@ -30,6 +30,7 @@ Bot behavior and the column-level data model are defined in the **GGB Bot Spec**
 | `src/discord.ts` | Discord REST calls: roles, members, messages, deferred replies |
 | `src/config.ts` | Loads `config/league.json`: import and staff role names, S4 relegated gyms |
 | `scripts/import.ts`, `scripts/import/` | The one-shot import of gyms and trainers |
+| `scripts/load-env.ts` | Loads `.env` or the file given with `--env`, which needs confirming first |
 | `scripts/register-commands.ts` | Registers the slash commands in `src/commands/` to the server in `DISCORD_GUILD_ID` |
 | `scripts/db-setup.ts` | Builds all League DB tabs in an empty workbook |
 | `scripts/sheets-smoke.ts` | Writes and reads the `Bot state` tab to check Sheets access |
@@ -75,6 +76,7 @@ The bot runs on Render as a Starter web service (always on), set up from `render
 
 | Setting | Value | Why |
 |---|---|---|
+| Branch | `production` | Deploys come from this branch, not `main`. Ship with `git push origin main:production` |
 | Plan and instances | Starter, 1 instance | Locks and recovery live in memory, so exactly one process may run. Never scale out |
 | Build | `npm ci --include=dev && npm run build` | TypeScript is a dev dependency |
 | Start | `node dist/server.js` | Not `npm start` or `npm run dev`, so SIGTERM reaches the bot itself |
@@ -86,7 +88,7 @@ Each deploy has a few seconds of downtime between the old process stopping and t
 
 **Environment variables.** Every variable in the Setup table, set in the service's Environment tab; `render.yaml` lists them by name with `sync: false` and never holds values. Render sets `PORT` itself. Never set `GGB_CRASH_AT` or `GGB_FAIL_AT` on Render.
 
-**Discord.** After the first deploy is live, stop any local bot that uses the same League DB, then set the app's Interactions Endpoint URL (Developer Portal > General Information) to `https://<service>.onrender.com/interactions` and save. Discord sends a PING first, so a save that succeeds means the bot answered. The hosted bot doesn't register commands itself. After any change to the command definitions ships to production, wait for the deploy to go live, then run `npm run register -- --env .env.production` from your machine. Registering first would show Trainers commands the running bot can't handle yet.
+**Discord.** After the first deploy is live, stop any local bot that uses the same League DB, then set the app's Interactions Endpoint URL (Developer Portal > General Information) to `https://<service>.onrender.com/interactions` and save. Discord sends a PING first, so a save that succeeds means the bot answered. The hosted bot doesn't register commands itself. After any change to the command definitions ships to production, wait for the deploy to go live, then run `npm run register -- --env .env.production` from your machine. Registering first would show trainers commands the running bot can't handle yet.
 
 **Logs.** On a deploy, expect the old process's `SIGTERM: N interaction(s) in progress` and `interactions finished after Ns` (or the 25-second timeout line) before the new one's `listening on 10000` and `startup finished; taking interactions`.
 

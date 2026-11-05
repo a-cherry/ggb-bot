@@ -1,7 +1,8 @@
 // Loads the env file a script runs against: .env, or the file given with
 // --env <path>. Any other file may be production, so the script prints
 // what it will touch and waits for confirmation before doing anything.
-// Import this first: the scripts' other imports and top-level code run after it.
+// Import this first: the env loads before the scripts' other imports run, and
+// their top-level code waits for the confirmation.
 import dotenv from 'dotenv';
 import { resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
