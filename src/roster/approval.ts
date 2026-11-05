@@ -112,6 +112,7 @@ async function decide(interaction: ComponentInteraction, requestId: string, appr
   } catch (err) {
     return stoppedPartway(interaction.guild_id, requestId, card, err);
   }
+  crashPoint('approved');
 
   const problems = await afterApproval(interaction.guild_id, applied);
   return problems.length ? { message: [result.message, ...problems].join('\n') } : result;
@@ -137,14 +138,14 @@ function claimChange(req: RosterRequest, gym: Gym): string {
   return formatChange({ ...parseChange(req.change), old_name: gym.name, old_emote: gym.emote });
 }
 
-// For testing failures in development. GGB_CRASH_AT=claimed, history, written
-// or recovery stops the bot at that point. GGB_FAIL_AT, a comma-separated list
+// For testing failures in development. GGB_CRASH_AT=claimed, history, written,
+// approved or recovery stops the bot at that point. GGB_FAIL_AT, a comma-separated list
 // of those points, card (posting a new request's staff card), views, role (one
 // member's role) or announce, throws once at each, as a failed Sheets or
 // Discord call would.
 const failed = new Set<string>();
 export function crashPoint(
-  point: 'claimed' | 'history' | 'written' | 'recovery' | 'card' | 'views' | 'role' | 'announce',
+  point: 'claimed' | 'history' | 'written' | 'approved' | 'recovery' | 'card' | 'views' | 'role' | 'announce',
 ): void {
   if (process.env.GGB_CRASH_AT === point) {
     console.error(`GGB_CRASH_AT=${point}: stopping the bot mid-approval`);

@@ -12,7 +12,7 @@ import { afterApproval, announcementFor, closeGym, crashPoint, outcomeLine } fro
 import { FAN_SUFFIX } from './checks.js';
 import type { RoleChange } from './discord-roles.js';
 import { findGym, gymName, loadLeague, type Gym, type League, type Trainer } from './league.js';
-import { closeApprovalCard, parseChange, type RosterRequest } from './requests.js';
+import { closeApprovalCard, closeCard, parseChange, processingCards, reopenCard, type RosterRequest } from './requests.js';
 
 type History = Row<'rosterHistory'>;
 
@@ -41,7 +41,9 @@ async function recoverOne(guildId: string, requestId: string, gymId: string): Pr
   try {
     await withLock(`gym:${gymId}`, async () => {
       const outcome = await recoverRequest(guildId, requestId);
-      if (outcome && !(await closeApprovalCard(requestId, outcome))) {
+      if (!outcome) {
+        await settleProcessingCards(requestId);
+      } else if (!(await closeApprovalCard(requestId, outcome))) {
         console.error(`${requestId}: staff card not found to mark approved`);
       }
     });
@@ -49,6 +51,36 @@ async function recoverOne(guildId: string, requestId: string, gymId: string): Pr
     console.error(`${requestId}: crash recovery failed:`, err);
   }
 }
+
+// Cards a stopped process left on the processing line, or just `requestId`'s.
+// Run only when no press can be in progress on them: at startup, or under the
+// gym's lock. A claimed request is left to recovery, which closes its card.
+export async function settleProcessingCards(requestId?: string): Promise<void> {
+  try {
+    const cards = (await processingCards()).filter((c) => !requestId || c.requestId === requestId);
+    if (!cards.length) return;
+    const { requests } = await loadLeague();
+    for (const card of cards) {
+      const req = requests.find((r) => r.values.request_id === card.requestId)?.values;
+      if (!req || (req.status === 'pending' && req.decided_by)) continue;
+      try {
+        if (req.status === 'pending') await reopenCard(card);
+        else await closeCard(card, stoppedOutcome(req));
+      } catch (err) {
+        console.error(`${card.requestId}: staff card could not be settled:`, err);
+      }
+    }
+  } catch (err) {
+    console.error('settling staff cards failed:', err);
+  }
+}
+
+// An approved request's roles and announcement may not have happened: the bot
+// can't tell how far past the approved mark it got (Roster Spec: "Not recovered").
+const stoppedOutcome = (req: RosterRequest) =>
+  req.status === 'approved'
+    ? `${outcomeLine(req)}\nThe bot stopped during this approval: check the Discord roles and the announcement.`
+    : outcomeLine(req);
 
 // Finishes or resets one stopped approval; the caller holds the gym's lock.
 // Returns the card's outcome lines when it finished the approval, or nothing
@@ -65,7 +97,7 @@ export async function recoverRequest(guildId: string, requestId: string): Promis
   const history = league.history.map((h) => h.values).filter((h) => h.request_id === requestId);
 
   if (!started(req, gym, history)) {
-    // Staff approve it again from its card, which still has its buttons.
+    // Staff approve it again from its card; the caller puts back any buttons a press removed.
     await updateRows('rosterRequests', [{ rowNumber: row.rowNumber, values: { ...req, decided_by: '', decided_at: '' } }]);
     console.log(`${requestId}: the approval stopped before it wrote anything; it's pending again`);
     return undefined;

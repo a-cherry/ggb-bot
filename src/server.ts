@@ -10,7 +10,8 @@ import { handleDisbandButton } from './commands/gym.js';
 import { deferredCommands } from './commands/index.js';
 import { alertStaff, drain, inFlightCount, runDeferred, runDeferredUpdate } from './interactions.js';
 import { handleDecision } from './roster/approval.js';
-import { recoverApprovals } from './roster/recovery.js';
+import { recoverApprovals, settleProcessingCards } from './roster/recovery.js';
+import { CARD_PROCESSING } from './roster/requests.js';
 import { TABS, type TabKey } from './schema.js';
 import { readTabs, SheetLayoutError } from './sheet-rows.js';
 
@@ -88,7 +89,7 @@ app.post('/interactions', express.raw({ type: '*/*', limit: MAX_BODY }), verifyK
     interaction.type === InteractionType.MESSAGE_COMPONENT &&
     /^(approve|reject):/.test(interaction.data.custom_id)
   ) {
-    runDeferredUpdate(res, interaction, handleDecision, '⏳ Processing…');
+    runDeferredUpdate(res, interaction, handleDecision, CARD_PROCESSING);
     return;
   }
 
@@ -146,6 +147,7 @@ try {
 } catch (err) {
   console.error('crash recovery failed:', err);
 }
+await settleProcessingCards();
 
 ready = true;
 console.log('startup finished; taking interactions');

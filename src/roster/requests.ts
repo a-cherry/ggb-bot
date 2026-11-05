@@ -1,6 +1,6 @@
 // Roster requests rows and their staff approval cards (Roster Spec: "Making a request", "Approval").
 import { getLeagueConfig } from '../config.js';
-import { cachedRoles, editMessage, escapeMarkdown, listMessages, postMessage, type ActionRow } from '../discord.js';
+import { cachedRoles, editMessage, escapeMarkdown, listMessages, postMessage, type ActionRow, type Message } from '../discord.js';
 import type { Row } from '../sheet-rows.js';
 import { findTrainer, mention, type League } from './league.js';
 
@@ -185,9 +185,35 @@ export async function postStaffAlert(guildId: string, text: string): Promise<voi
 // How many recent staff channel messages to search for a request's card.
 const CARD_SEARCH_PAGES = 5;
 
+// Shown in place of a card's buttons while a press on them is worked on.
+export const CARD_PROCESSING = '⏳ Processing…';
+const PROCESSING_LINE = `\n${CARD_PROCESSING}`;
+
+const withoutProcessing = (content: string) =>
+  content.endsWith(PROCESSING_LINE) ? content.slice(0, -PROCESSING_LINE.length) : content;
+
+// The newest messages first, so a caller can stop as soon as it has what it needs.
+async function* recentStaffMessages(channelId: string): AsyncGenerator<Message> {
+  let before: string | undefined;
+  for (let page = 0; page < CARD_SEARCH_PAGES; page++) {
+    const messages = await listMessages(channelId, before);
+    yield* messages;
+    if (messages.length < 100) return;
+    before = messages[messages.length - 1].id;
+  }
+}
+
+// The request an undecided card is for: from its button, or from its title
+// while it's on the processing line. Closed cards have neither.
+function cardRequestId(m: Message): string | undefined {
+  const button = m.components?.flatMap((row) => row.components).find((b) => b.custom_id?.startsWith('approve:'));
+  if (button) return button.custom_id.slice('approve:'.length);
+  return m.content.endsWith(PROCESSING_LINE) ? /^\*\*Roster request (R\d+)\*\*/.exec(m.content)?.[1] : undefined;
+}
+
 // Replaces a request's card text and removes its buttons, e.g. on a cancel.
 // The card's message ID isn't stored, so it's found among the staff channel's
-// recent messages by its button. Returns false when it isn't found.
+// recent messages. Returns false when it isn't found.
 export async function closeApprovalCard(requestId: string, outcome: string): Promise<boolean> {
   return !(await closeApprovalCards(new Map([[requestId, outcome]]))).length;
 }
@@ -198,24 +224,41 @@ export async function closeApprovalCards(outcomes: Map<string, string>): Promise
   const channelId = staffChannelId();
   const left = new Map(outcomes);
   const failed: string[] = [];
-  let before: string | undefined;
-  for (let page = 0; page < CARD_SEARCH_PAGES && left.size; page++) {
-    const messages = await listMessages(channelId, before);
-    for (const m of messages) {
-      const button = m.components?.flatMap((row) => row.components).find((b) => b.custom_id?.startsWith('approve:'));
-      const requestId = button?.custom_id?.slice('approve:'.length);
-      const outcome = requestId && left.get(requestId);
-      if (!requestId || !outcome) continue;
-      left.delete(requestId);
-      try {
-        await editMessage(channelId, m.id, `${m.content}\n${outcome}`, []);
-      } catch (err) {
-        console.error(`${requestId}: staff card could not be closed:`, err);
-        failed.push(requestId);
-      }
+  for await (const m of recentStaffMessages(channelId)) {
+    const requestId = cardRequestId(m);
+    const outcome = requestId && left.get(requestId);
+    if (!requestId || !outcome) continue;
+    left.delete(requestId);
+    try {
+      await editMessage(channelId, m.id, `${withoutProcessing(m.content)}\n${outcome}`, []);
+    } catch (err) {
+      console.error(`${requestId}: staff card could not be closed:`, err);
+      failed.push(requestId);
     }
-    if (messages.length < 100) break;
-    before = messages[messages.length - 1].id;
+    if (!left.size) break;
   }
   return [...failed, ...[...left.keys()].map((id) => `${id} (not found)`)];
 }
+
+export interface ProcessingCard {
+  requestId: string;
+  messageId: string;
+  text: string; // without the processing line
+}
+
+// Cards on the processing line, which only a running press clears.
+export async function processingCards(): Promise<ProcessingCard[]> {
+  const cards: ProcessingCard[] = [];
+  for await (const m of recentStaffMessages(staffChannelId())) {
+    const requestId = m.components?.length ? undefined : cardRequestId(m);
+    if (requestId) cards.push({ requestId, messageId: m.id, text: withoutProcessing(m.content) });
+  }
+  return cards;
+}
+
+// Puts a pending request's buttons back on its card.
+export const reopenCard = (card: ProcessingCard) =>
+  editMessage(staffChannelId(), card.messageId, card.text, approvalButtons(card.requestId));
+
+export const closeCard = (card: ProcessingCard, outcome: string) =>
+  editMessage(staffChannelId(), card.messageId, `${card.text}\n${outcome}`, []);
