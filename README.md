@@ -103,7 +103,7 @@ Each deploy has a few seconds of downtime between the old process stopping and t
 | `npm run sheets-smoke` | Checks the service account can read and write the workbook |
 | `npm run import -- --season N --dry-run` / `--commit [--force]` | Imports gyms and trainers from Discord (see Testing the import) |
 
-`register`, `db:setup` and `import` read `.env`. Add `--env <path>` to use another file, e.g. `npm run register -- --env .env.production`. With any file other than `.env`, the script prints the file, guild ID and spreadsheet ID and does nothing until you type `yes`.
+`register`, `db:setup`, `import` and `sheets-smoke` read `.env`. Add `--env <path>` to use another file, e.g. `npm run register -- --env .env.production`. With any file other than `.env`, the script prints the file, guild ID and spreadsheet ID and does nothing until you type `yes`.
 
 ## Setting up a League DB workbook
 

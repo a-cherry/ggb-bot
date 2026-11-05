@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import './load-env.js';
 import { getSheets } from '../src/google.js';
 
 const spreadsheetId = process.env.GOOGLE_LEAGUE_DB_ID;
