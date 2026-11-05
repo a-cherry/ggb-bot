@@ -4,7 +4,7 @@
 // result when the handler finishes.
 import { InteractionResponseFlags, InteractionResponseType } from 'discord-interactions';
 import type { Response } from 'express';
-import { editOriginalResponse, postFollowup, type ActionRow, type Member } from './discord.js';
+import { editOriginalResponse, postFollowup, USER_MENTIONS, type ActionRow, type Member } from './discord.js';
 import { LockTimeout } from './locks.js';
 import { postStaffAlert } from './roster/requests.js';
 import { SheetLayoutError } from './sheet-rows.js';
@@ -141,7 +141,7 @@ export function runDeferredUpdate(
   if (pending) {
     res.send({
       type: InteractionResponseType.UPDATE_MESSAGE,
-      data: { content: `${interaction.message.content}\n${pending}`, components: [], allowed_mentions: { parse: ['users'] } },
+      data: { content: `${interaction.message.content}\n${pending}`, components: [], allowed_mentions: USER_MENTIONS },
     });
   } else {
     // Acknowledges without changing the message yet; nothing shows as "thinking".

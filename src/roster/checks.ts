@@ -2,7 +2,7 @@
 // or undefined when the check passes. Approval runs the same checks again.
 import { formatDate, isInSeason } from '../seasons.js';
 import { findGym, findTrainer, gymName, mention, seasonMoves, type Gym, type League, type Trainer } from './league.js';
-import { isGymRequest, playerOrCoach, roleLabel, type RequestType } from './requests.js';
+import { isGymRequest, leadershipTitle, type RequestType } from './requests.js';
 
 // A gym's fan role is its gym role's name plus this (Bot Spec: "Initial population").
 export const FAN_SUFFIX = ' Fan';
@@ -64,7 +64,7 @@ export function checkTargetOnGym(league: League, targetId: string, gym: Gym): st
 // The leader can't be removed or step down; they hand leadership to someone else first.
 export function checkTargetNotLeader(league: League, targetId: string, gym: Gym): string | undefined {
   if (findTrainer(league, targetId)?.leadership !== 'leader') return undefined;
-  return `${mention(targetId)} is ${gym.name}'s ${roleLabel('leader')}. They must hand leadership to someone else first, with /roster update-trainer leadership:leader.`;
+  return `${mention(targetId)} is ${gym.name}'s ${leadershipTitle('leader')}. They must hand leadership to someone else first, with /roster update-trainer leadership:leader.`;
 }
 
 export function checkTargetStatus(league: League, targetId: string): string | undefined {
@@ -126,12 +126,11 @@ export function checkUpdate(
     const leader = checkTargetNotLeader(league, targetId, gym);
     if (leader) return leader;
   }
-  if (change.role === target.role) return `${mention(targetId)} is already a ${playerOrCoach(target.role)}.`;
   if (change.leadership === 'none' && target.leadership !== 'vice-leader') {
-    return `${mention(targetId)} isn't ${gym.name}'s ${roleLabel('vice-leader')}.`;
+    return `${mention(targetId)} isn't ${gym.name}'s ${leadershipTitle('vice-leader')}.`;
   }
   if (change.leadership && change.leadership === target.leadership) {
-    return `${mention(targetId)} is already ${gym.name}'s ${roleLabel(target.leadership)}.`;
+    return `${mention(targetId)} is already ${gym.name}'s ${leadershipTitle(target.leadership)}.`;
   }
   return (
     (change.leadership === 'leader' || change.leadership === 'vice-leader' ? checkTargetStatus(league, targetId) : undefined) ??

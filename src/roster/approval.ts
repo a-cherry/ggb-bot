@@ -11,7 +11,7 @@ import {
 import { applyRoleChanges, renameRoles, type RoleChange, type RoleRename } from './discord-roles.js';
 import { findGym, gymName, loadLeague, mention, requestInfo, type Gym, type League, type Trainer } from './league.js';
 import {
-  closeApprovalCards, formatChange, isGymRequest, leadershipTitle, parseChange, playerOrCoach, type RequestType, type RosterRequest,
+  closeApprovalCards, describeUpdate, formatChange, isGymRequest, parseChange, type RequestType, type RosterRequest,
 } from './requests.js';
 import { recoverRequest } from './recovery.js';
 
@@ -393,25 +393,12 @@ export async function announcementFor(guildId: string, req: RosterRequest, gym: 
     case 'remove':
       return `${gymLine} has removed ${mention(req.target)} from their roster`;
     case 'update-trainer':
-      return `${gymLine} ${updateTrainerLine(req)}`;
+      return `${gymLine} has ${describeUpdate(req, true)}`;
     case 'rebrand':
       return `${gymLine} has rebranded to ${change.emote} **${escapeMarkdown(change.name)}**`;
     case 'disband':
       return `${gymLine} has disbanded`;
   }
-}
-
-// What an update-trainer did to the target, for the announcement: appointed to a
-// leadership, moved between player and coach, or stepped down from leadership to
-// the role they keep. A leadership and role change together name both.
-function updateTrainerLine(req: RosterRequest): string {
-  const change = parseChange(req.change);
-  const target = mention(req.target);
-  const leadership = leadershipTitle(change.leadership);
-  const moved = change.role ? `from ${playerOrCoach(req.snapshot_role || 'trainer')} to ${playerOrCoach(change.role)}` : undefined;
-  if (leadership) return `has appointed ${target} as ${leadership}${moved ? ` and moved them ${moved}` : ''}`;
-  if (change.leadership === 'none') return `has moved ${target} to ${playerOrCoach(change.role ?? req.snapshot_role)}`;
-  return `has moved ${target} ${moved}`;
 }
 
 export async function updateGym(league: League, gym: Gym): Promise<void> {

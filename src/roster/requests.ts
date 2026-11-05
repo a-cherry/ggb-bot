@@ -24,52 +24,44 @@ export const parseChange = (change: string): Record<string, string> => (change ?
 // Rebrand and disband change the gym itself and have no target trainer.
 export const isGymRequest = (type: string) => type === 'rebrand' || type === 'disband';
 
-// A role or leadership value as staff and trainers know it: the Discord role name.
-export function roleLabel(value: string): string {
+// A leadership by its Discord role name.
+export function leadershipTitle(leadership: string): string | undefined {
   const { roles } = getLeagueConfig();
-  const labels: Record<string, string> = {
-    trainer: roles.participatingTrainer,
-    'non-playing': roles.nonPlayer,
-    leader: roles.gymLeader,
-    'vice-leader': roles.gymViceLeader,
-  };
-  return labels[value] ?? value;
+  return ({ leader: roles.gymLeader, 'vice-leader': roles.gymViceLeader } as Record<string, string>)[leadership];
 }
 
-// Positions as requests and announcements name them, rather than by Discord role name.
-export const leadershipTitle = (leadership: string): string | undefined =>
-  ({ leader: 'Gym Leader', 'vice-leader': 'Gym Vice-Leader' } as Record<string, string>)[leadership];
 export const playerOrCoach = (role: string) => (role === 'non-playing' ? 'coach' : 'player');
 
-// An update-trainer's parts: the leadership it appoints, if any, and the role
-// the target moves from and to, if that changes or they step down from leadership.
+// An update-trainer's parts: the leadership it appoints, if any, and the move,
+// if the role changes or the target steps down from leadership.
 function trainerUpdate(req: RosterRequest) {
   const change = parseChange(req.change);
-  const from = playerOrCoach(req.snapshot_role || 'trainer');
+  const steppingDown = change.leadership === 'none';
+  const from = (steppingDown && leadershipTitle(req.snapshot_leadership)) || playerOrCoach(req.snapshot_role);
   return {
     appoint: leadershipTitle(change.leadership),
-    from: change.role ? from : undefined,
-    to: change.role || change.leadership === 'none' ? playerOrCoach(change.role ?? req.snapshot_role) : undefined,
-    stepDown: change.leadership === 'none' ? leadershipTitle(req.snapshot_leadership) : undefined,
+    move: change.role || steppingDown ? `from ${from} to ${playerOrCoach(change.role ?? req.snapshot_role)}` : undefined,
   };
 }
 
-// The update for the trainer-facing post and replies: "appoint @X as Gym
-// Vice-Leader", "move @X from player to coach", or both.
-function describeUpdate(req: RosterRequest): string {
-  const { appoint, from, to, stepDown } = trainerUpdate(req);
+// An update-trainer as a phrase, for the post and replies or, in the past
+// tense, the announcement.
+export function describeUpdate(req: RosterRequest, past = false): string {
+  const { appoint, move } = trainerUpdate(req);
   const target = mention(req.target);
-  const move = to && `from ${stepDown ?? from} to ${to}`;
-  if (appoint) return `appoint ${target} as ${appoint}${move ? ` and move them ${move}` : ''}`;
-  return `move ${target} ${move}`;
+  const [appointVerb, moveVerb] = past ? ['appointed', 'moved'] : ['appoint', 'move'];
+  if (appoint) return `${appointVerb} ${target} as ${appoint}${move ? ` and ${moveVerb} them ${move}` : ''}`;
+  return `${moveVerb} ${target} ${move}`;
 }
 
-// An update-trainer for the staff card: "move from player to coach", "appoint to Gym Vice-Leader".
+// The same for the staff card, which names the trainer on its own line.
 function cardUpdate(req: RosterRequest): string {
-  const { appoint, from, to, stepDown } = trainerUpdate(req);
-  const move = to && `move from ${stepDown ?? from} to ${to}`;
-  return [...(appoint ? [`appoint to ${appoint}`] : []), ...(move ? [move] : [])].join(' and ');
+  const { appoint, move } = trainerUpdate(req);
+  return [appoint && `appoint to ${appoint}`, move && `move ${move}`].filter(Boolean).join(' and ');
 }
+
+const rebrandedTo = (change: Record<string, string>) =>
+  `${change.emote} **${escapeMarkdown(change.name)}** (${escapeMarkdown(change.abbreviation)})`;
 
 // The change for the staff card, which names the gym and trainer on their own lines.
 function cardChange(req: RosterRequest): string {
@@ -82,11 +74,9 @@ function cardChange(req: RosterRequest): string {
     case 'update-trainer':
       return cardUpdate(req);
     case 'rebrand':
-      return `rebrand to ${change.emote} **${escapeMarkdown(change.name)}** (${escapeMarkdown(change.abbreviation)})`;
+      return `rebrand to ${rebrandedTo(change)}`;
     case 'disband':
       return 'disband';
-    default:
-      return `${req.type} ${req.change}`;
   }
 }
 
@@ -102,11 +92,9 @@ export function describeChange(req: RosterRequest, gym: string): string {
     case 'update-trainer':
       return describeUpdate(req);
     case 'rebrand':
-      return `rebrand ${gym} to ${change.emote} **${escapeMarkdown(change.name)}** (${escapeMarkdown(change.abbreviation)})`;
+      return `rebrand ${gym} to ${rebrandedTo(change)}`;
     case 'disband':
       return `disband ${gym}`;
-    default:
-      return `${req.type} ${req.change}`;
   }
 }
 

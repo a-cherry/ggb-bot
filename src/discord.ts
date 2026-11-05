@@ -178,10 +178,12 @@ export interface ActionRow {
 
 // User mentions ping. Discord only sends a mentioned user's details with a
 // message that's allowed to ping them; without those, a viewer whose app hasn't
-// loaded that member sees @unknown-user. Role mentions never ping, except the
-// roles in `pingRoleIds`.
+// loaded that member sees @unknown-user.
+export const USER_MENTIONS = { parse: ['users'] };
+
+// Role mentions ping only for the roles in `pingRoleIds`.
 export const postMessage = (channelId: string, content: string, components?: ActionRow[], pingRoleIds: string[] = []) =>
-  call('POST', `/channels/${channelId}/messages`, { content, components, allowed_mentions: { parse: ['users'], roles: pingRoleIds } });
+  call('POST', `/channels/${channelId}/messages`, { content, components, allowed_mentions: { ...USER_MENTIONS, roles: pingRoleIds } });
 
 // For a message that lists many members, e.g. the import report: no mention pings.
 export const postSilentMessage = (channelId: string, content: string) =>
@@ -202,7 +204,7 @@ export const editMessage = (channelId: string, messageId: string, content: strin
   call('PATCH', `/channels/${channelId}/messages/${messageId}`, {
     content,
     components,
-    allowed_mentions: { parse: ['users'] },
+    allowed_mentions: USER_MENTIONS,
   });
 
 // Fills in a deferred interaction reply or, for a button press, edits the
@@ -211,7 +213,7 @@ export const editOriginalResponse = (applicationId: string, token: string, conte
   call('PATCH', `/webhooks/${applicationId}/${token}/messages/@original`, {
     content,
     components,
-    allowed_mentions: { parse: ['users'] },
+    allowed_mentions: USER_MENTIONS,
   });
 
 // A public message in the channel where a command ran, after its deferred
@@ -220,7 +222,7 @@ export const postFollowup = (applicationId: string, token: string, content: stri
   call('POST', `/webhooks/${applicationId}/${token}`, {
     content,
     flags: ephemeral ? 64 : undefined,
-    allowed_mentions: { parse: ['users'] },
+    allowed_mentions: USER_MENTIONS,
   });
 
 // The name a member shows in the server: nickname, else global display name, else username.
