@@ -72,12 +72,12 @@ The tunnel URL changes every time cloudflared restarts, so step 3 repeats each s
 
 ## Deploy
 
-The bot runs on Render as a Starter web service (always on), set up from `render.yaml` in the repo root: Render dashboard > New > Blueprint, connect the repo, and Render creates the service from the file. Creating it by hand works too with the same settings.
+The bot runs on Render as an always-on web service, set up from `render.yaml` in the repo root: Render dashboard > New > Blueprint, connect the repo, and Render creates the service from the file. Creating it by hand works too with the same settings.
 
 | Setting | Value | Why |
 |---|---|---|
 | Branch | `production` | Deploys come from this branch, not `main`. Ship with `git push origin main:production` |
-| Plan and instances | Starter, 1 instance | Locks and recovery live in memory, so exactly one process may run. Never scale out |
+| Instances | 1 | Locks and recovery live in memory, so exactly one process may run. Never scale out |
 | Build | `npm ci --include=dev && npm run build` | TypeScript is a dev dependency |
 | Start | `node dist/server.js` | Not `npm start` or `npm run dev`, so SIGTERM reaches the bot itself |
 | Disk | 1 GB at `/var/data`, unused | A disk turns off Render's zero-downtime deploys, so the old process stops before the new one starts. Without it the two overlap for a minute or more, and the new one's startup recovery could take over an approval the old one is still writing. Don't remove it |
@@ -92,15 +92,13 @@ Each deploy has a few seconds of downtime between the old process stopping and t
 
 **Logs.** On a deploy, expect the old process's `SIGTERM: N interaction(s) in progress` and `interactions finished after Ns` (or the 25-second timeout line) before the new one's `listening on 10000` and `startup finished; taking interactions`.
 
-**Railway.** The code is host-agnostic and runs on Railway too: set `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=60` so Railway waits for the drain, and leave `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS` unset. Railway still sends new interactions to the new process while the old one drains; the 150-second recovery wait covers that.
-
 ## Scripts
 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Runs the server with reload on save |
 | `npm run build` / `npm start` | Compiles to `dist/` and runs the compiled server |
-| `npm run register` | Overwrites the slash commands in the `DISCORD_GUILD_ID` server with the ones in `scripts/register-commands.ts` |
+| `npm run register` | Overwrites the slash commands in the `DISCORD_GUILD_ID` server with the ones in `src/commands/` |
 | `npm run db:setup` | Builds every League DB tab in the workbook at `GOOGLE_LEAGUE_DB_ID` |
 | `npm run sheets-smoke` | Checks the service account can read and write the workbook |
 | `npm run import -- --season N --dry-run` / `--commit [--force]` | Imports gyms and trainers from Discord (see Testing the import) |
@@ -143,13 +141,13 @@ When a column is added to or changed in `src/schema.ts`, `db:setup` refuses on t
 
 ## Testing the import
 
-The import reads the Discord member list once and writes the Gyms and Trainers tabs (Bot Spec: "Initial population"). Test it against the dev test server and dev workbook, never the real ones.
+The import reads the Discord member list once and writes the Gyms, Trainers and Roster history tabs (Bot Spec: "Initial population"). Test it against the dev test server and dev workbook, never the real ones.
 
 ### 1. Test server
 
 As server owner, in the Discord client:
 
-1. **Channel.** Create a private text channel `#bot-staff`. Under the channel's Permissions, add the bot with View Channel, Send Messages and Read Message History (a cancelled request's card is found by reading recent messages). Copy its ID into `DISCORD_STAFF_CHANNEL_ID`.
+1. **Channel.** Create a private text channel `#bot-staff`. Under the channel's Permissions, add the bot with View Channel, Send Messages and Read Message History (a card closed from anywhere but its own button is found by reading recent messages). Copy its ID into `DISCORD_STAFF_CHANNEL_ID`.
 2. **Roles.** Create these, with no permissions (they're labels only). Names must match exactly.
 
     | Role(s) | Purpose |
