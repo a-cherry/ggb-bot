@@ -1,0 +1,179 @@
+{
+  "gyms": [
+    {
+      "rowNumber": 23,
+      "values": {
+        "gym_id": "G022",
+        "name": "Phoenix",
+        "abbreviation": "",
+        "status": "active",
+        "emote": ":phoenix~1:"
+      }
+    },
+    {
+      "rowNumber": 26,
+      "values": {
+        "gym_id": "G025",
+        "name": "Summit",
+        "abbreviation": "",
+        "status": "active",
+        "emote": ":summit:"
+      }
+    },
+    {
+      "rowNumber": 8,
+      "values": {
+        "gym_id": "G007",
+        "name": "Dragonite's Requiem",
+        "abbreviation": "",
+        "status": "relegated",
+        "emote": ":dragoniterequiem:"
+      }
+    }
+  ],
+  "trainers": [
+    {
+      "rowNumber": 35,
+      "values": {
+        "discord_id": "1200000000000000001",
+        "server_nickname": "Right Player 01",
+        "username": "right_player_01",
+        "country": "",
+        "gym_id": "G025",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 55,
+      "values": {
+        "discord_id": "1100000000000000001",
+        "server_nickname": "Left Player 01",
+        "username": "left_player_01",
+        "country": "",
+        "gym_id": "G022",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 62,
+      "values": {
+        "discord_id": "1100000000000000002",
+        "server_nickname": "Left Player 02",
+        "username": "left_player_02",
+        "country": "",
+        "gym_id": "G022",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 97,
+      "values": {
+        "discord_id": "1100000000000000004",
+        "server_nickname": "Left Player 04",
+        "username": "left_player_04",
+        "country": "",
+        "gym_id": "G022",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 126,
+      "values": {
+        "discord_id": "1200000000000000002",
+        "server_nickname": "Right Player 02",
+        "username": "right_player_02",
+        "country": "",
+        "gym_id": "G025",
+        "role": "trainer",
+        "leadership": "leader",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 129,
+      "values": {
+        "discord_id": "1200000000000000003",
+        "server_nickname": "Right Player 03",
+        "username": "right_player_03",
+        "country": "",
+        "gym_id": "G025",
+        "role": "trainer",
+        "leadership": "vice-leader",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 132,
+      "values": {
+        "discord_id": "1200000000000000004",
+        "server_nickname": "Right Player 04",
+        "username": "right_player_04",
+        "country": "",
+        "gym_id": "G025",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 140,
+      "values": {
+        "discord_id": "1100000000000000005",
+        "server_nickname": "Left Player 05",
+        "username": "left_player_05",
+        "country": "",
+        "gym_id": "G022",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 144,
+      "values": {
+        "discord_id": "1200000000000000005",
+        "server_nickname": "Right Player 05",
+        "username": "right_player_05",
+        "country": "",
+        "gym_id": "G025",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    },
+    {
+      "rowNumber": 379,
+      "values": {
+        "discord_id": "1100000000000000003",
+        "server_nickname": "Left Player 03",
+        "username": "left_player_03",
+        "country": "",
+        "gym_id": "G022",
+        "role": "trainer",
+        "leadership": "none",
+        "status": "active"
+      }
+    }
+  ],
+  "seasons": [
+    {
+      "rowNumber": 2,
+      "values": {
+        "season": "5",
+        "start_date": "46341",
+        "end_date": "46539",
+        "active": "true"
+      }
+    }
+  ],
+  "matches": [],
+  "decks": []
+}
