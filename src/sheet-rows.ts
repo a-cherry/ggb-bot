@@ -79,6 +79,31 @@ export async function appendRows<K extends TabKey>(key: K, rows: Row<K>[]): Prom
   });
 }
 
+// Writes only these columns of each row, in one batch; the row's other cells are
+// not touched. The columns must sit next to each other, in schema order.
+export async function updateColumns<K extends TabKey>(
+  key: K, columns: readonly (keyof Row<K>)[], rows: SheetRow<K>[],
+): Promise<void> {
+  if (!rows.length) return;
+  const all: readonly string[] = TABS[key].columns;
+  const first = all.indexOf(columns[0] as string);
+  if (first < 0 || columns.some((c, i) => all[first + i] !== c)) {
+    throw new Error(`updateColumns: ${columns.join(', ')} are not adjacent columns of ${TABS[key].name}`);
+  }
+  const from = String.fromCharCode(65 + first);
+  const to = String.fromCharCode(65 + first + columns.length - 1);
+  await getSheets().spreadsheets.values.batchUpdate({
+    spreadsheetId: getLeagueDbId(),
+    requestBody: {
+      valueInputOption: 'RAW',
+      data: rows.map((r) => ({
+        range: `${tabRange(TABS[key].name)}!${from}${r.rowNumber}:${to}${r.rowNumber}`,
+        values: [columns.map((c) => r.values[c])],
+      })),
+    },
+  });
+}
+
 export async function updateRows<K extends TabKey>(key: K, rows: SheetRow<K>[]): Promise<void> {
   if (!rows.length) return;
   await getSheets().spreadsheets.values.batchUpdate({

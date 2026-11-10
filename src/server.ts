@@ -9,6 +9,8 @@ import {
 import { handleDisbandButton } from './commands/gym.js';
 import { deferredCommands } from './commands/index.js';
 import { alertStaff, drain, inFlightCount, runDeferred, runDeferredUpdate } from './interactions.js';
+import { startNameSync } from './jobs/name-sync-job.js';
+import type { Runner } from './jobs/runner.js';
 import { handleDecision } from './roster/approval.js';
 import { recoverApprovals, settleProcessingCards } from './roster/recovery.js';
 import { CARD_PROCESSING } from './roster/requests.js';
@@ -27,6 +29,8 @@ const app = express();
 // waits for it before sending traffic here.
 let ready = false;
 let shuttingDown = false;
+// The nightly name sync, started once startup has finished.
+let nameSync: Runner | undefined;
 
 app.get('/health', (_req, res) => {
   if (!ready || shuttingDown) {
@@ -113,6 +117,8 @@ const DRAIN_MS = 25_000;
 
 // On a deploy or Ctrl+C: stop taking interactions, let the ones in progress
 // finish, so an approval isn't cut off after it's marked approved, then exit.
+// A name sync in progress gets the same wait; its write is one request, so being
+// cut off costs at most a repeat run at the next boot.
 const shutdown = async (signal: string) => {
   if (shuttingDown) return;
   shuttingDown = true;
@@ -120,7 +126,7 @@ const shutdown = async (signal: string) => {
   console.log(`${signal}: ${inFlightCount()} interaction(s) in progress; finishing them, then stopping`);
   server.close();
   const timedOut = await Promise.race([
-    drain().then(() => false),
+    Promise.all([drain(), nameSync?.stop()]).then(() => false),
     new Promise<true>((r) => setTimeout(() => r(true), DRAIN_MS).unref()),
   ]);
   if (timedOut) console.error(`stopping with ${inFlightCount()} interaction(s) still in progress after ${DRAIN_MS / 1000}s`);
@@ -150,3 +156,7 @@ await settleProcessingCards();
 
 ready = true;
 console.log('startup finished; taking interactions');
+
+// The nightly name sync (Bot Spec: "Nickname sync"). If a night was missed, or
+// none was ever recorded, it runs now; after that, at 21:00 Denver.
+if (!shuttingDown) nameSync = startNameSync(guildId);
