@@ -12,6 +12,7 @@
     "start": "node dist/server.js",
     "db:setup": "tsx scripts/db-setup.ts",
     "import": "tsx scripts/import.ts",
+    "sync-names": "tsx scripts/sync-names.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p test",
     "capture-match-fixtures": "tsx scripts/capture-match-fixtures.ts"
   },

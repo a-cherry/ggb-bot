@@ -108,6 +108,7 @@ Requires Node 22 or later, a Discord application and test server, and a Google C
 | `npm run sheets-smoke` | Checks the service account can read and write the workbook |
 | `npm run import -- --season N --dry-run` | Previews importing gyms and trainers from Discord roles. Writes nothing |
 | `npm run import -- --season N --commit [--force]` | Runs the import. `--force` clears and re-imports the Gyms, Trainers and Roster history tabs |
+| `npm run sync-names` | Previews the nightly name refresh: what the bot would change in Trainers, and whether its 90% safety check would trip. Writes nothing; the bot does the writing itself at 9 PM Denver |
 | `npm run capture-match-fixtures` | Re-captures the match test fixtures, with players replaced by fake ones |
 
 The scripts read `.env` by default. Add `--env <file>` to use another, e.g. `npm run register -- --env .env.production`. With any file other than `.env`, a script shows which server and workbook it will touch and waits for you to type `yes`.
