@@ -33,7 +33,7 @@ const row = (rowNumber: number, id: string, name: string, username: string, gymI
 test('nothing changes when the names already match', () => {
   const members = [member('1', { nick: 'Aster' }), member('2', { global: 'Birch' })];
   const rows = [row(2, '1', 'Aster', 'user1'), row(3, '2', 'Birch', 'user2')];
-  assert.deepEqual(diffNames(members, rows), { changes: [], matched: 2, total: 2 });
+  assert.deepEqual(diffNames(members, rows), { changes: [], departures: [], matched: 2, total: 2 });
 });
 
 test('a new nickname changes only that row, keeping its other columns and row number', () => {
@@ -56,9 +56,31 @@ test('a cleared nickname falls back to the global name, then the username', () =
   assert.deepEqual(changes.map((c) => c.values.server_nickname), ['Global One', 'user2']);
 });
 
-test('a Trainer who left the server is left untouched but counts in the total', () => {
-  const rows = [row(2, '1', 'Aster', 'user1'), row(3, '9', 'Gone', 'gone')];
-  assert.deepEqual(diffNames([member('1', { nick: 'Aster' })], rows), { changes: [], matched: 1, total: 2 });
+test('a rostered Trainer who left the server is a departure: off the gym, inactive, names kept', () => {
+  const gone = { ...row(3, '9', 'Gone', 'gone'), values: { ...row(3, '9', 'Gone', 'gone').values, role: 'non-playing', leadership: 'vice-leader' } };
+  const rows = [row(2, '1', 'Aster', 'user1'), gone];
+  const { changes, departures, matched, total } = diffNames([member('1', { nick: 'Aster' })], rows);
+  assert.deepEqual([changes, matched, total], [[], 1, 2]);
+  assert.deepEqual(departures, [{
+    rowNumber: 3,
+    before: gone.values,
+    after: { ...gone.values, gym_id: '', role: 'trainer', leadership: 'none', status: 'inactive' },
+  }]);
+});
+
+test('a Trainer with no gym who left the server is not a departure', () => {
+  const rows = [row(2, '1', 'Aster', 'user1'), row(3, '9', 'Gone', 'gone', '')];
+  assert.deepEqual(diffNames([member('1', { nick: 'Aster' })], rows).departures, []);
+});
+
+test('suspended and banned Trainers who leave keep their status', () => {
+  const withStatus = (n: number, status: string): TrainerRow => {
+    const r = row(n, String(n), `T${n}`, `user${n}`);
+    return { ...r, values: { ...r.values, status } };
+  };
+  const rows = [withStatus(2, 'suspended'), withStatus(3, 'banned'), withStatus(4, 'active')];
+  const { departures } = diffNames([], rows);
+  assert.deepEqual(departures.map((d) => [d.after.status, d.after.gym_id]), [['suspended', ''], ['banned', ''], ['inactive', '']]);
 });
 
 test('server members with no Trainers row are ignored and do not enter the counts', () => {
@@ -72,13 +94,13 @@ test('server members with no Trainers row are ignored and do not enter the count
 
 test('rows with no discord_id are skipped and not counted', () => {
   const rows = [row(2, '', 'Blank', 'blank'), row(3, '1', 'Aster', 'user1')];
-  assert.deepEqual(diffNames([member('1', { nick: 'Aster' })], rows), { changes: [], matched: 1, total: 1 });
+  assert.deepEqual(diffNames([member('1', { nick: 'Aster' })], rows), { changes: [], departures: [], matched: 1, total: 1 });
 });
 
 test('an empty name never overwrites a stored one', () => {
   const rows = [row(2, '1', 'Aster', 'olduser')];
   // A nickname of only spaces and an empty username both come back empty once trimmed.
-  assert.deepEqual(diffNames([member('1', { nick: '   ', username: '' })], rows), { changes: [], matched: 1, total: 1 });
+  assert.deepEqual(diffNames([member('1', { nick: '   ', username: '' })], rows), { changes: [], departures: [], matched: 1, total: 1 });
 });
 
 test('names are trimmed, so stray spaces do not make a row look changed every night', () => {
@@ -101,9 +123,9 @@ test('bot accounts are handled like any member: matched by id, so only a Trainer
 
 test('rows with no gym_id are renamed like any other, but stay out of the counts', () => {
   const rows = [row(2, '1', 'Aster', 'user1'), row(3, '2', 'Old', 'user2', ''), row(4, '3', 'Gone', 'gone', '')];
-  const { changes, matched, total } = diffNames([member('1', { nick: 'Aster' }), member('2', { nick: 'New' })], rows);
+  const { changes, departures, matched, total } = diffNames([member('1', { nick: 'Aster' }), member('2', { nick: 'New' })], rows);
   assert.deepEqual(changes.map((c) => [c.rowNumber, c.values.server_nickname]), [[3, 'New']]);
-  assert.deepEqual([matched, total], [1, 1]);
+  assert.deepEqual([departures, matched, total], [[], 1, 1]);
 });
 
 test('a discord_id on two rows renames both rows the same way', () => {
