@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Member } from '../src/discord.js';
 import { withLock } from '../src/locks.js';
-import { MIN_MATCH_RATE, type TrainerRow } from '../src/jobs/name-diff.js';
+import { MAX_DEPARTURES, MIN_MATCH_RATE, type TrainerRow } from '../src/jobs/name-diff.js';
 import { NameSyncAbort, syncNames, type NameSyncDeps } from '../src/jobs/name-sync.js';
 
 const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -38,8 +38,10 @@ const AT = new Date('2026-11-10T04:00:07.000Z');
 function deps(log: string[], over: Partial<NameSyncDeps> = {}): NameSyncDeps {
   return {
     listMembers: async () => (log.push('list'), membersWith([2, 5])),
-    readGymIds: async () => (log.push('gyms'), ['G001', 'G002']),
+    readContext: async () => (log.push('gyms'), { gyms: [{ gym_id: 'G001', name: 'Gym One' }, { gym_id: 'G002', name: 'Gym Two' }], season: '7' }),
     readTrainers: async () => (log.push('read'), rows),
+    appendHistory: async (h) => void log.push(`history ${h.map((r) => `${r.discord_id}:${r.before_gym_id}>${r.after_gym_id}:${r.source}:${r.season}`).join(',')}`),
+    writeMembership: async (written) => void log.push(`membership ${written.map((r) => `${r.rowNumber}:${r.values.status}`).join(',')}`),
     writeNames: async (written) => void log.push(`write ${written.map((r) => r.rowNumber).join(',')}`),
     rebuildViews: async () => void log.push('views'),
     recordRun: async (at) => void log.push(`record ${at.toISOString()}`),
@@ -53,7 +55,7 @@ test('a run lists, reads, writes the changed rows, rebuilds the views once, then
   const log: string[] = [];
   const result = await syncNames(deps(log));
   assert.deepEqual(log, ['list', 'gyms', 'read', 'write 3,6', 'views', `record ${AT.toISOString()}`]);
-  assert.deepEqual(result, { changed: 2, matched: 10, total: 10, viewsError: undefined });
+  assert.deepEqual(result, { changed: 2, departed: 0, matched: 10, total: 10, lostLeaders: [], viewsError: undefined });
 });
 
 test('with nothing to change it writes no rows and rebuilds nothing, but still records', async () => {
@@ -141,7 +143,7 @@ test('every gym lock is held from the read through the write, and released after
   let approval: Promise<void> | undefined;
   const run = syncNames(
     deps([], {
-      readGymIds: async () => ['NS-1', 'NS-2'],
+      readContext: async () => ({ gyms: [{ gym_id: 'NS-1', name: 'One' }, { gym_id: 'NS-2', name: 'Two' }], season: '' }),
       writeNames: async () => {
         events.push('write');
         // An approval on one of the gyms, arriving mid-write: it must wait.
@@ -185,5 +187,73 @@ test('a failed record after a write logs what was written and fails the attempt'
     /Sheets 503/,
   );
   assert.ok(log.includes('write 3,6'));
-  assert.ok(log.some((l) => /^log 2 Trainers rows were renamed, but recording the run failed/.test(l)));
+  assert.ok(log.some((l) => /^log 2 Trainers rows were renamed and 0 taken off their gyms, but recording the run failed/.test(l)));
+});
+
+// The ten rostered Trainers with the last `n` of them gone from the server; T1 is G001's leader.
+const leaderRows = rows.map((r, i) => (i === 0 ? { ...r, values: { ...r.values, leadership: 'leader' } } : r));
+const allBut = (gone: number[]) => membersWith().filter((m) => !gone.includes(Number(m.user.id)));
+
+test('a rostered Trainer who left is written to history, then taken off the gym, then the views rebuilt', async () => {
+  const log: string[] = [];
+  const result = await syncNames(deps(log, { listMembers: async () => (log.push('list'), allBut([4])) }));
+  assert.deepEqual(log.filter((l) => !l.startsWith('log ')), [
+    'list', 'gyms', 'read', 'history 4:G001>:sync:7', 'membership 5:inactive', 'views', `record ${AT.toISOString()}`,
+  ]);
+  assert.ok(log.includes('log T4 (4) of Gym One left the server: taken off the gym, status now inactive'));
+  assert.deepEqual([result.departed, result.changed, result.lostLeaders], [1, 0, []]);
+});
+
+test('departures and renames in one run both write', async () => {
+  const log: string[] = [];
+  const result = await syncNames(deps(log, {
+    listMembers: async () => membersWith([2]).filter((m) => m.user.id !== '4'),
+  }));
+  assert.ok(log.includes('membership 5:inactive'));
+  assert.ok(log.includes('write 3'));
+  assert.deepEqual([result.departed, result.changed], [1, 1]);
+});
+
+test('a leader who left is returned, so the job can tell staff the gym has no leader', async () => {
+  const log: string[] = [];
+  const result = await syncNames(deps(log, {
+    listMembers: async () => allBut([1]),
+    readTrainers: async () => leaderRows,
+  }));
+  assert.deepEqual(result.lostLeaders, [{ gymName: 'Gym One', name: 'T1', discordId: '1' }]);
+  assert.ok(log.some((l) => l.endsWith('taken off the gym, was leader, status now inactive')));
+});
+
+test(`exactly ${MAX_DEPARTURES} departures go ahead`, async () => {
+  // A hundred rostered Trainers, so the floor stays met.
+  const many = Array.from({ length: 100 }, (_, i) => trainer(i + 1, `T${i + 1}`));
+  const present = many.slice(MAX_DEPARTURES).map((r) => member(Number(r.values.discord_id), r.values.server_nickname));
+  const log: string[] = [];
+  const result = await syncNames(deps(log, { listMembers: async () => present, readTrainers: async () => many }));
+  assert.equal(result.departed, MAX_DEPARTURES);
+});
+
+test(`more than ${MAX_DEPARTURES} departures abort with nothing written, naming them for staff`, async () => {
+  const many = Array.from({ length: 100 }, (_, i) => trainer(i + 1, `T${i + 1}`));
+  const present = many.slice(MAX_DEPARTURES + 1).map((r) => member(Number(r.values.discord_id), `New ${r.values.discord_id}`));
+  const log: string[] = [];
+  await assert.rejects(
+    syncNames(deps(log, { listMembers: async () => (log.push('list'), present), readTrainers: async () => (log.push('read'), many) })),
+    (err) => err instanceof NameSyncAbort &&
+      /^6 rostered Trainers are no longer in the server, more than the 5 one run takes off their gyms, so nothing was changed: T1 \(1\) of Gym One, /.test(err.message),
+  );
+  assert.deepEqual(log.filter((l) => !l.startsWith('log ')), ['list', 'gyms', 'read']);
+  assert.equal(log.filter((l) => l.startsWith('log would have taken')).length, 6);
+});
+
+test('a failed history write takes no one off a gym and records nothing', async () => {
+  const log: string[] = [];
+  await assert.rejects(
+    syncNames(deps(log, {
+      listMembers: async () => (log.push('list'), allBut([4])),
+      appendHistory: async () => Promise.reject(new Error('Sheets 500')),
+    })),
+    /Sheets 500/,
+  );
+  assert.deepEqual(log, ['list', 'gyms', 'read']);
 });

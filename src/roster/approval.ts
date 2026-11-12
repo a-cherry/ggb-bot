@@ -436,6 +436,8 @@ async function writeTrainers(
       status: before?.status ?? 'active',
       ...c.set,
     };
+    // Someone the nickname sync marked inactive when they left the server is active again once on a gym.
+    if (after.gym_id && after.status === 'inactive') after.status = 'active';
     history.push(historyRow(league, req, before, after));
     if (existing) updates.push({ rowNumber: existing.rowNumber, values: after });
     else appends.push(after);

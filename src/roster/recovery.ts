@@ -158,8 +158,10 @@ async function reapplyTrainers(guildId: string, league: League, history: History
     const existing = league.trainers.find((t) => t.values.discord_id === h.discord_id);
     if (existing) {
       const v = existing.values;
-      if (v.gym_id !== set.gym_id || v.role !== set.role || v.leadership !== set.leadership) {
-        updates.push({ rowNumber: existing.rowNumber, values: { ...v, ...set } });
+      // As writeTrainers does: an inactive trainer put on a gym is active again.
+      const status = set.gym_id && v.status === 'inactive' ? 'active' : v.status;
+      if (v.gym_id !== set.gym_id || v.role !== set.role || v.leadership !== set.leadership || v.status !== status) {
+        updates.push({ rowNumber: existing.rowNumber, values: { ...v, ...set, status } });
       }
       continue;
     }
